@@ -113,11 +113,11 @@ parentprocess(int readfd, char* verifydata, int size) {
   char* chunk = malloc(size*sizeof(char));;
   int bytes = receivebytes(readfd, chunk, size);
   if(bytes != size) {
-    printf("Received corrupted data\n");
+    printf("Received corrupted data. Size doesn't match.\n");
     return;
   }
   if(!compare(verifydata, chunk, size)) {
-    printf("The received data is corrupted\n");
+    printf("The received data is corrupted. Bytes doesn't match.\n");
     return;
   }
   int end = uptime();

@@ -8,7 +8,8 @@
 #include "sleeplock.h"
 #include "file.h"
 
-#define PIPESIZE 512
+#define PIPESIZE 4000
+#define min(a, b) ((a) < (b) ? (a) : (b))
 
 struct pipe {
   struct spinlock lock;
@@ -89,25 +90,33 @@ pipewrite(struct pipe *pi, uint64 addr, int n)
       wakeup(&pi->nread);
       sleep(&pi->nwrite, &pi->lock);
     } else {
-      char ch;
-      if(copyin(pr->pagetable, &ch, addr + i, 1) == -1)
+
+      int buffersize = PIPESIZE - (pi->nwrite - pi->nread);
+      int minbytes = min( min(buffersize, n-i), PIPESIZE - (pi->nwrite%PIPESIZE) );
+      if(copyin(pr->pagetable, &pi->data[pi->nwrite % PIPESIZE], addr + i, minbytes) == -1)
         break;
-      pi->data[pi->nwrite++ % PIPESIZE] = ch;
-      i++;
+      pi->nwrite += minbytes;
+      i += minbytes;
+
+      buffersize = PIPESIZE - (pi->nwrite - pi->nread);
+      minbytes = min( min(buffersize, n-i), PIPESIZE - (pi->nwrite%PIPESIZE) );
+      if(copyin(pr->pagetable, &pi->data[pi->nwrite % PIPESIZE], addr + i, minbytes) == -1)
+        break;
+      pi->nwrite += minbytes;
+      i += minbytes;
     }
   }
   wakeup(&pi->nread);
   release(&pi->lock);
-
+  //printf("bytes transfered: %d, to be transfered: %d\n", i, n);
   return i;
+
 }
 
 int
 piperead(struct pipe *pi, uint64 addr, int n)
 {
-  int i;
   struct proc *pr = myproc();
-  char ch;
 
   acquire(&pi->lock);
   while(pi->nread == pi->nwrite && pi->writeopen){  //DOC: pipe-empty
@@ -117,12 +126,22 @@ piperead(struct pipe *pi, uint64 addr, int n)
     }
     sleep(&pi->nread, &pi->lock); //DOC: piperead-sleep
   }
-  for(i = 0; i < n; i++){  //DOC: piperead-copy
-    if(pi->nread == pi->nwrite)
+
+  int i = 0;
+  while(i<n) {
+    int minbytes = min(min(n-i, pi->nwrite - pi->nread), PIPESIZE- (pi->nread%PIPESIZE));
+    if(minbytes == 0 || copyout(pr->pagetable, addr + i, &pi->data[pi->nread % PIPESIZE], minbytes) == -1)
       break;
-    ch = pi->data[pi->nread++ % PIPESIZE];
-    if(copyout(pr->pagetable, addr + i, &ch, 1) == -1)
+    pi->nread += minbytes;
+    i += minbytes;
+
+    minbytes = min(min(n-i, pi->nwrite - pi->nread), PIPESIZE- (pi->nread%PIPESIZE));
+    if(minbytes == 0 || copyout(pr->pagetable, addr + i, &pi->data[pi->nread % PIPESIZE], minbytes) == -1)
       break;
+    pi->nread += minbytes;
+    i += minbytes;
+    
+    //printf("bytes read: %d\n", i);
   }
   wakeup(&pi->nwrite);  //DOC: piperead-wakeup
   release(&pi->lock);
