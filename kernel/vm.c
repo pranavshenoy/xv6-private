@@ -5,6 +5,7 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include <stddef.h>
 
 /*
  * the kernel's page table.
@@ -337,6 +338,43 @@ uvmclear(pagetable_t pagetable, uint64 va)
   *pte &= ~PTE_U;
 }
 
+void
+my_memcpy(void* dst, void* src, uint64  n) {
+
+  typedef uint64 __attribute__((__may_alias__)) u64;
+  unsigned char* s =  src;
+  unsigned char* d =  dst;
+
+  while(n>=32) {
+    *(u64*)d = *(u64*)s;
+    d += 8;
+    s += 8;
+    n -= 8;
+    *(u64*)d = *(u64*)s;
+    d += 8;
+    s += 8;
+    n -= 8;
+    *(u64*)d = *(u64*)s;
+    d += 8;
+    s += 8;
+    n -= 8;
+    *(u64*)d = *(u64*)s;
+    d += 8;
+    s += 8;
+    n -= 8;
+  }
+  while(n>=8) {
+    *(u64*)d = *(u64*)s;
+    d += 8;
+    s += 8;
+    n -= 8;
+  }
+  while(n>0) {
+    *d++ = *s++;
+    n--;
+  }
+}
+
 // Copy from kernel to user.
 // Copy len bytes from src to virtual address dstva in a given page table.
 // Return 0 on success, -1 on error.
@@ -353,8 +391,8 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
     n = PGSIZE - (dstva - va0);
     if(n > len)
       n = len;
-    memmove((void *)(pa0 + (dstva - va0)), src, n);
-
+    //memmove((void *)(pa0 + (dstva - va0)), src, n);
+    my_memcpy((void *)(pa0 + (dstva - va0)), src, n);
     len -= n;
     src += n;
     dstva = va0 + PGSIZE;
@@ -378,8 +416,8 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
     n = PGSIZE - (srcva - va0);
     if(n > len)
       n = len;
-    memmove(dst, (void *)(pa0 + (srcva - va0)), n);
-
+    //memmove(dst, (void *)(pa0 + (srcva - va0)), n);
+    my_memcpy(dst, (void *)(pa0 + (srcva - va0)), n);
     len -= n;
     dst += n;
     srcva = va0 + PGSIZE;

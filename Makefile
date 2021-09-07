@@ -135,6 +135,7 @@ UPROGS=\
 	$U/_first-program\
 	$U/_pipetest\
 	$U/_random\
+	$U/_cpytest\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

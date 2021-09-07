@@ -2,6 +2,7 @@
 #include "kernel/stat.h"
 #include "user/user.h"
 #include "stdbool.h"
+#include <stdint.h>
 
 //Source: https://github.com/joonlim/xv6/blob/master/random.c                                                                                                                                              
 
@@ -112,6 +113,7 @@ parentprocess(int readfd, char* verifydata, int size) {
   int start = uptime();
   char* chunk = malloc(size*sizeof(char));;
   int bytes = receivebytes(readfd, chunk, size);
+  int end = uptime();
   if(bytes != size) {
     printf("Received corrupted data. Size doesn't match.\n");
     return;
@@ -120,13 +122,13 @@ parentprocess(int readfd, char* verifydata, int size) {
     printf("The received data is corrupted. Bytes doesn't match.\n");
     return;
   }
-  int end = uptime();
   wait(0);
   printf("Total time taken to finish transfer: %d ticks\n", end - start);
 }
 
 void
 childprocess(int writeFd, char* data, int size) {
+  
   int bytes = sendbytes(writeFd, data, size);
   if(bytes == -1) {
     printf("Couldn't send all the data\n");
@@ -138,16 +140,13 @@ main(int argc, char *argv[])
 {
   int p[2];
   pipe(p);
-
-  uint64 size = 1000*1000*10;
-  char* data = randomcharchunk(size);
-   
+  unsigned long size = 1000*1000*40;                                                                                                                                                                   
+  char* data = randomcharchunk(size);  
   int pid = fork();
   if(pid == -1) {
     printf("Some error occured while forking");
     exit(0);
   }
-  
   if(pid == 0) {
     close(p[0]);
     childprocess(p[1], data, size);
