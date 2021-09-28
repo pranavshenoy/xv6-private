@@ -484,3 +484,11 @@ sys_pipe(void)
   }
   return 0;
 }
+
+
+uint64
+sys_ringbuf(void) {
+
+  printf("welcome to your first syscall\n");
+  return 0;
+}
