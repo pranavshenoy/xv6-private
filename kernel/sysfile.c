@@ -15,6 +15,7 @@
 #include "sleeplock.h"
 #include "file.h"
 #include "fcntl.h"
+#include "ringbuf.h"
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -489,6 +490,13 @@ sys_pipe(void)
 uint64
 sys_ringbuf(void) {
 
-  printf("welcome to your first syscall\n");
-  return 0;
+  char name[R_BUF_NAME_SIZE];
+  uint64 vm_addr;
+  if(argstr(0, name, R_BUF_NAME_SIZE) < 0)
+    return -1;
+  if(argaddr(0, &vm_addr) < 0) {
+    return -1;
+  }
+  int res = create_ringbuf(name, vm_addr);
+  return res;
 }
