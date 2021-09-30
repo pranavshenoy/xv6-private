@@ -497,6 +497,6 @@ sys_ringbuf(void) {
   if(argaddr(0, &vm_addr) < 0) {
     return -1;
   }
-  int res = create_ringbuf(name, vm_addr);
+  int res = create_ringbuf(name, &vm_addr);
   return res;
 }

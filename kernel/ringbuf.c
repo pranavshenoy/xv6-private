@@ -20,6 +20,7 @@ struct ringbuf {
 
 //return 0 if name is valid, -1 if not.
 int validate_name(char* name) {
+  //TODO: validate name
   return 0;
 }
 
@@ -65,7 +66,7 @@ int allocate_pm(int pages, void** phy_addr) {
   return 0;
 }
 
-int new_rbuffer(char* name, int rbuf_index) {
+int update_rbuffer(char* name, int rbuf_index) {
 
   rb_arr[rbuf_index].refcount += 1;
   strncpy(rb_arr[rbuf_index].name, name, strlen(name));
@@ -75,6 +76,7 @@ int new_rbuffer(char* name, int rbuf_index) {
   return 0;
 }
 
+//-- Virtual Address mapping
 void unmap_va(void* virt_addr, int pages) {
 
   if(pages < 0) {
@@ -84,17 +86,67 @@ void unmap_va(void* virt_addr, int pages) {
   uvmunmap(p->pagetable, (uint64) virt_addr, pages, 0);
 }
 
-int map_va_to_pa(void** phy_buffer, void* virt_addr, int phy_pages) {
-
-  struct proc *p = myproc();
-  for(int i=0;i< (phy_pages*2);i++) {
-    if(mappages(p->pagetable, (uint64)(virt_addr+i), 1, (uint64)*(phy_buffer+ i%phy_pages), PTE_W|PTE_R|PTE_X|PTE_U) != 0) {
-      unmap_va(virt_addr, i);
+//check if the number of pages in va is free starting from va. return 0 if all pages are free, else return -1.
+int verify_va(pagetable_t pagetable, uint64 va, int pages) {
+  for(int i=0;i<pages;i++) {
+    if(walkaddr(pagetable, va-i*4096) != 0) {
       return -1;
     }
   }
   return 0;
 }
+
+int get_free_va(pagetable_t pagetable, uint64* virt_addr, int pages) {
+  
+  int retries =	10;
+  uint64 start_addr = 0x86400000;
+  uint64 gap = 0x32000;  //200*1024;
+  int i	= 0;
+  while(i<retries) {
+    uint64 addr = start_addr-(i*gap);
+    if(verify_va(pagetable, addr, pages) == 0) {
+      *virt_addr = addr;
+      return 0;
+    }
+    i++;
+  }
+  return -1;
+}
+
+int map_va(pagetable_t pagetable, void** phy_buffer, uint64* virt_addr, int phy_pages) {
+
+  int ring_buf_size = phy_pages - 1;
+  int pg_size = 4096;
+  for(int i=0;i<ring_buf_size*2;i++) {
+    if(mappages(pagetable, (uint64)(*virt_addr+i*pg_size), 1, (uint64)*(phy_buffer + i%ring_buf_size), PTE_W|PTE_R|PTE_X|PTE_U) != 0) {
+      unmap_va(virt_addr, i);
+      return -1;
+    }
+  }
+  if(mappages(pagetable, (uint64)(*virt_addr+ 2*ring_buf_size*pg_size), 1, (uint64)*(phy_buffer + ring_buf_size), PTE_W|PTE_R|PTE_X|PTE_U) != 0) {
+      unmap_va(virt_addr, ring_buf_size*2);
+      return -1;
+  }
+  return 0;
+}
+
+int create_va(pagetable_t pagetable, uint64* virt_addr, int rb_index, int phy_pages) {
+
+  uint64 ptr;
+  printf("TEST: entering create_va\n");
+  if(get_free_va(pagetable, &ptr, phy_pages*2-1) != 0) {
+    return -1;
+  }
+  printf("TEST: got free va\n");
+  if(map_va(pagetable, rb_arr[rb_index].pa, &ptr, phy_pages) != 0) {
+    return -1;
+  }
+  printf("TEST: mapping done\n");
+  *virt_addr = ptr;
+  printf("TEST: returning to user process\n");
+  return 0;
+}
+
 
 //TESTING
 void display_pm(int pages, int rbuf_index) {
@@ -103,8 +155,10 @@ void display_pm(int pages, int rbuf_index) {
   }
 }
 
+
+//TODO: rename to a generic one
 uint64
-create_ringbuf(char* name, uint64  vm_addr) {
+create_ringbuf(char* name, uint64* vm_addr) {
 
   if(validate_name(name) != 0) {
     printf("Ring buffer name is not valid\n");
@@ -117,36 +171,20 @@ create_ringbuf(char* name, uint64  vm_addr) {
     return -1;
   }
   if(!exists) {
-    if(new_rbuffer(name, rbuf_index) != 0) {
+    if(update_rbuffer(name, rbuf_index) != 0) {
       printf("unable to allocate physical memory\n");
       return -1;
     }
     printf("Received a free index: %d for name: %s\n", rbuf_index, name);
-  } 
-  //display_pm(R_BUF_SIZE, rbuf_index);
-
-
-
-/*    
-  for(int i=0;i<MAX_R_BUFS;i++) {
-    printf("first value in rbuf %s \n", rb_arr[i].name);
   }
-*/  
-  //struct proc *p = myproc();
-
-/*
-  char value = 'g';
-  printf("Hello %s!! and  address %p\n", name, vm_addr);
-  
-  if(copyout(p->pagetable, vm_addr, &value,
-                          sizeof(char)) < 0) {
-    printf("successfully transfered the data to user space. %p \n", &value);
-  } else {
-    printf("failure in transferring the data to user space. %p \n", &value);
+  struct proc *p = myproc();
+  uint64 va;
+  if(create_va(p->pagetable, &va, rbuf_index, R_BUF_SIZE) != 0) {
+    printf("unable to map virtual memory address\n");
+    return -1;
   }
-*/
+  *vm_addr = va;
   return 0;
-
 }
 
 
