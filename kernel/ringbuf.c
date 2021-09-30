@@ -32,7 +32,6 @@ int find(char* name, bool* exists) {
   *exists = false;
   for(int i=0;i<MAX_R_BUFS;i++) {                                                                                                                                                                         
     if(strncmp(name, rb_arr[i].name, strlen(name)) == 0) {
-      printf("%s and %s matched\n", name, rb_arr[i].name);
       *exists = true;
       return i;
     }
@@ -54,7 +53,10 @@ int free_pm(int pages, void* phy_addr) {
 
 int allocate_pm(int pages, void** phy_addr) {
   for(int i=0;i<pages;i++) {
-    *(phy_addr+i) = kalloc();
+    void* ptr = kalloc();
+    printf("Phy mem address after allocation %p\n", ptr);
+    *(phy_addr+i) = ptr;
+    printf("Phy mem address in pointer %p\n", *(phy_addr+i));
     if(*(phy_addr+i) == 0) {
       free_pm(i, phy_addr);
       return -1;
@@ -77,7 +79,7 @@ int new_rbuffer(char* name, int rbuf_index) {
 //TESTING
 void display_pm(int pages, int rbuf_index) {
   for(int i=0;i<pages;i++) {
-    printf("Physical memory allocated %x \n", (uint64) rb_arr[rbuf_index].pa[i]);
+    printf("Physical memory allocated %p \n", (uint64) *(rb_arr[rbuf_index].pa+i));
   }
 }
 
@@ -102,7 +104,7 @@ create_ringbuf(char* name, uint64  vm_addr) {
     }
     printf("Received a free index: %d for name: %s\n", rbuf_index, name);
   } 
-  display_pm(R_BUF_SIZE, rbuf_index);
+  //display_pm(R_BUF_SIZE, rbuf_index);
 
 
 
