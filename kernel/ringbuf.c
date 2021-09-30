@@ -44,6 +44,43 @@ int find(char* name, bool* exists) {
 }
 
 
+int free_pm(int pages, void* phy_addr) {
+
+  for(int i=0;i<pages;i++) {
+    kfree(phy_addr+i);
+  }
+  return 0;
+}
+
+int allocate_pm(int pages, void** phy_addr) {
+  for(int i=0;i<pages;i++) {
+    *(phy_addr+i) = kalloc();
+    if(*(phy_addr+i) == 0) {
+      free_pm(i, phy_addr);
+      return -1;
+    }
+  }
+  return 0;
+}
+
+int new_rbuffer(char* name, int rbuf_index) {
+
+  rb_arr[rbuf_index].refcount += 1;
+  strncpy(rb_arr[rbuf_index].name, name, strlen(name));
+  if(allocate_pm(R_BUF_SIZE, rb_arr[rbuf_index].pa) != 0) {
+    return -1;
+  }
+  return 0;
+}
+
+
+//TESTING
+void display_pm(int pages, int rbuf_index) {
+  for(int i=0;i<pages;i++) {
+    printf("Physical memory allocated %x \n", (uint64) rb_arr[rbuf_index].pa[i]);
+  }
+}
+
 
 uint64
 create_ringbuf(char* name, uint64  vm_addr) {
@@ -59,10 +96,13 @@ create_ringbuf(char* name, uint64  vm_addr) {
     return -1;
   }
   if(!exists) {
+    if(new_rbuffer(name, rbuf_index) != 0) {
+      printf("unable to allocate physical memory\n");
+      return -1;
+    }
     printf("Received a free index: %d for name: %s\n", rbuf_index, name);
-  } else {
-    printf("Received a valid index: %d for name: %s\n", rbuf_index, name);
-  }
+  } 
+  display_pm(R_BUF_SIZE, rbuf_index);
 
 
 

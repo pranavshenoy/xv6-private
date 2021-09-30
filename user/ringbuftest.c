@@ -29,7 +29,7 @@ int
 main(int argc, char *argv[])
 {
   //test_find_1();
-  test_find_2();
+  test_find_1();
 
   exit(0);
 }
