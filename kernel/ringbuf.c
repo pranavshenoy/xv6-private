@@ -43,7 +43,7 @@ int find(char* name, bool* exists) {
 }
 
 
-int free_pm(int pages, void* phy_addr) {
+int deallocate_pm(int pages, void* phy_addr) {
 
   for(int i=0;i<pages;i++) {
     kfree(phy_addr+i);
@@ -54,11 +54,11 @@ int free_pm(int pages, void* phy_addr) {
 int allocate_pm(int pages, void** phy_addr) {
   for(int i=0;i<pages;i++) {
     void* ptr = kalloc();
-    printf("Phy mem address after allocation %p\n", ptr);
+    //printf("Phy mem address after allocation %p\n", ptr);
     *(phy_addr+i) = ptr;
-    printf("Phy mem address in pointer %p\n", *(phy_addr+i));
+    //printf("Phy mem address in pointer %p\n", *(phy_addr+i));
     if(*(phy_addr+i) == 0) {
-      free_pm(i, phy_addr);
+      deallocate_pm(i, phy_addr);
       return -1;
     }
   }
@@ -75,6 +75,26 @@ int new_rbuffer(char* name, int rbuf_index) {
   return 0;
 }
 
+void unmap_va(void* virt_addr, int pages) {
+
+  if(pages < 0) {
+    return;
+  }
+  struct proc *p = myproc();
+  uvmunmap(p->pagetable, (uint64) virt_addr, pages, 0);
+}
+
+int map_va_to_pa(void** phy_buffer, void* virt_addr, int phy_pages) {
+
+  struct proc *p = myproc();
+  for(int i=0;i< (phy_pages*2);i++) {
+    if(mappages(p->pagetable, (uint64)(virt_addr+i), 1, (uint64)*(phy_buffer+ i%phy_pages), PTE_W|PTE_R|PTE_X|PTE_U) != 0) {
+      unmap_va(virt_addr, i);
+      return -1;
+    }
+  }
+  return 0;
+}
 
 //TESTING
 void display_pm(int pages, int rbuf_index) {
@@ -82,7 +102,6 @@ void display_pm(int pages, int rbuf_index) {
     printf("Physical memory allocated %p \n", (uint64) *(rb_arr[rbuf_index].pa+i));
   }
 }
-
 
 uint64
 create_ringbuf(char* name, uint64  vm_addr) {
