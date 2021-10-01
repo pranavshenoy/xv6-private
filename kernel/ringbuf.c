@@ -29,21 +29,21 @@ int validate_name(char* name) {
 int find(char* name, bool* exists) {
   int free_index = -1;
   *exists = false;
-  for(int i=0;i<MAX_R_BUFS;i++) {                                                                                                                                                                         
+  for(int i=0;i<MAX_R_BUFS;i++) {
+
+    if(rb_arr[i].refcount == 0) {
+      free_index = i;
+      continue;
+    }
     if(strncmp(name, rb_arr[i].name, strlen(name)) == 0) {
       *exists = true;
       return i;
-    }
-    if(rb_arr[i].refcount == 0) {
-      free_index = i;
     }
   }
   return free_index;
 }
 
-
 int deallocate_pm(int pages, void** phy_addr) {
-
   for(int i=0;i<pages;i++) {
     //printf("deallocating physical memory: %p\n", *(phy_addr+i));
     kfree(*(phy_addr+i));
@@ -172,7 +172,7 @@ int create_va(pagetable_t pagetable, uint64* virt_addr, int rb_index, int phy_pa
   // TEST
   printf("virtual address after mapping: %p\n", ptr);
   display_vm(pagetable, ptr, phy_pages*2-1);
-  unmap_va(ptr, 2*phy_pages-1);
+//  unmap_va(ptr, 2*phy_pages-1);
   //---
   *virt_addr = ptr;
   return 0;
@@ -187,7 +187,7 @@ void display_pm(int pages, int rbuf_index) {
 }
 
 
-void close(char* name, uint64 va) {
+void close_rbuf(char* name, uint64 va) {
 
   bool exists = false;
   int rbuf_index = find(name, &exists);
@@ -198,13 +198,12 @@ void close(char* name, uint64 va) {
   unmap_va(va, 2*R_BUF_SIZE-1);
   rb_arr[rbuf_index].refcount -= 1;
   if(rb_arr[rbuf_index].refcount == 0) {
-    //rb_arr[rbuf_index].name = '\0';
+    printf("Deallocating physical memory\n");
     if(deallocate_pm(R_BUF_SIZE, rb_arr[rbuf_index].pa) != 0) {
       panic("unable to deallocate physical address\n");
       return;
     }
   }
-  //clear proc structure
 }
 
 //TODO: rename to a generic one
@@ -216,9 +215,10 @@ uint64 create_ringbuf(char* name, uint64* vm_addr, int op) {
     return -1;
   }
   acquire(&rbuf_lock);
+  struct proc *p = myproc();
   if(op == 1) { //close 
     printf("closing the ringbuf for the process\n");
-    close(name, *vm_addr);
+    close_rbuf(name, *vm_addr);
     release(&rbuf_lock);
     return 0;
   }
@@ -237,7 +237,6 @@ uint64 create_ringbuf(char* name, uint64* vm_addr, int op) {
     }
     //printf("Received a free index: %d for name: %s\n", rbuf_index, name);
   }
-  struct proc *p = myproc();
   uint64 va;
   if(create_va(p->pagetable, &va, rbuf_index, R_BUF_SIZE) != 0) {
     printf("unable to map virtual memory address\n");
@@ -247,6 +246,8 @@ uint64 create_ringbuf(char* name, uint64* vm_addr, int op) {
     release(&rbuf_lock);
     return -1;
   }
+  strncpy(p->rbuf_name, name, strlen(name));
+  p->rbuf_va = va;
   vm_addr = (uint64*)va;
   release(&rbuf_lock);
   return 0;

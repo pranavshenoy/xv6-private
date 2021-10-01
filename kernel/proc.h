@@ -96,6 +96,8 @@ struct proc {
   // proc_tree_lock must be held when using this:
   struct proc *parent;         // Parent process
 
+  uint64 rbuf_va;
+  char rbuf_name[16];
   // these are private to the process, so p->lock need not be held.
   uint64 kstack;               // Virtual address of kernel stack
   uint64 sz;                   // Size of process memory (bytes)

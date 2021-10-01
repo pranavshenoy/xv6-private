@@ -15,6 +15,7 @@ struct proc *initproc;
 int nextpid = 1;
 struct spinlock pid_lock;
 
+extern void close_rbuf(char* name, uint64);
 extern void forkret(void);
 static void freeproc(struct proc *p);
 
@@ -352,6 +353,8 @@ exit(int status)
       p->ofile[fd] = 0;
     }
   }
+  printf("process killed. closing ring buffer\n");
+  close_rbuf(p->rbuf_name, p->rbuf_va);
 
   begin_op();
   iput(p->cwd);
