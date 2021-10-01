@@ -55,7 +55,7 @@ int allocate_pm(int pages, void** phy_addr) {
   for(int i=0;i<pages;i++) {
     void* ptr = kalloc();
     *(phy_addr+i) = ptr;
-    printf("i: %d Phy mem address in pointer %p\n", i, ptr);
+    //printf("i: %d Phy mem address in pointer %p\n", i, ptr);
     if(*(phy_addr+i) == 0) {
       deallocate_pm(i, phy_addr);
       return -1;
@@ -122,27 +122,6 @@ int get_free_va(pagetable_t pagetable, uint64* virt_addr, int pages) {
 }
 
 int map_va(pagetable_t pagetable, void** phy_buffer, uint64* virt_addr, int phy_pages) {
-/*
-  int ring_buf_size = phy_pages - 1;
-  for(int i=0;i<2*ring_buf_size;i++) {
-    uint64 va = *virt_addr + i*PG_SZ;
-    uint64 pa = (uint64) *(phy_buffer + i%ring_buf_size);
-    printf("i: %d virt address %p, phy address: %p\n", i, va, pa);
-    if(mappages(pagetable, va, 1, pa, PTE_W|PTE_R|PTE_X|PTE_U) != 0) {
-      unmap_va(*virt_addr, i);
-      return -1;
-    }
-  }
-  uint64 va = *virt_addr + 2*ring_buf_size*PG_SZ;
-  uint64 pa = (uint64) *(phy_buffer + 2*ring_buf_size);
-  printf("virt address %p, phy address: %p\n", va, pa);
-  if(mappages(pagetable, va, 1, pa, PTE_W|PTE_R|PTE_X|PTE_U) != 0) {
-    unmap_va(*virt_addr, 2*ring_buf_size);
-    return -1;
-  }
-  printf("mapping successful\n");
-  return 0;
-*/
 
   int ring_buf_size = phy_pages - 1;  
   for(int i=0;i<ring_buf_size*2;i++) {
@@ -164,16 +143,10 @@ int create_va(pagetable_t pagetable, uint64* virt_addr, int rb_index, int phy_pa
   if(get_free_va(pagetable, &ptr, phy_pages*2-1) != 0) {
     return -1;
   }
-  printf("virtual address: %p\n", ptr);
   if(map_va(pagetable, rb_arr[rb_index].pa, &ptr, phy_pages) != 0) {
     return -1;
   }
-  
-  // TEST
-  printf("virtual address after mapping: %p\n", ptr);
   display_vm(pagetable, ptr, phy_pages*2-1);
-//  unmap_va(ptr, 2*phy_pages-1);
-  //---
   *virt_addr = ptr;
   return 0;
 }
