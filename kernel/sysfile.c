@@ -494,9 +494,13 @@ sys_ringbuf(void) {
   uint64 vm_addr;
   if(argstr(0, name, R_BUF_NAME_SIZE) < 0)
     return -1;
-  if(argaddr(0, &vm_addr) < 0) {
+  if(argaddr(1, &vm_addr) < 0) {
     return -1;
   }
-  int res = create_ringbuf(name, &vm_addr);
+  int op;
+  if(argint(2, &op) < 0) {
+    return -1;
+  }
+  int res = create_ringbuf(name, &vm_addr, op);
   return res;
 }

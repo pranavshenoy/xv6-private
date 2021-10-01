@@ -187,14 +187,41 @@ void display_pm(int pages, int rbuf_index) {
 }
 
 
+void close(char* name, uint64 va) {
+
+  bool exists = false;
+  int rbuf_index = find(name, &exists);
+  if(!exists) {
+    panic("trying to free ring buffer that doesn't exist\n");
+    return;
+  }
+  unmap_va(va, 2*R_BUF_SIZE-1);
+  rb_arr[rbuf_index].refcount -= 1;
+  if(rb_arr[rbuf_index].refcount == 0) {
+    //rb_arr[rbuf_index].name = '\0';
+    if(deallocate_pm(R_BUF_SIZE, rb_arr[rbuf_index].pa) != 0) {
+      panic("unable to deallocate physical address\n");
+      return;
+    }
+  }
+  //clear proc structure
+}
+
 //TODO: rename to a generic one
-uint64 create_ringbuf(char* name, uint64* vm_addr) {
+//vm_addr must contain the virtual address during the close operation 
+uint64 create_ringbuf(char* name, uint64* vm_addr, int op) {
 
   if(validate_name(name) != 0) {
     printf("Ring buffer name is not valid\n");
     return -1;
   }
   acquire(&rbuf_lock);
+  if(op == 1) { //close 
+    printf("closing the ringbuf for the process\n");
+    close(name, *vm_addr);
+    release(&rbuf_lock);
+    return 0;
+  }
   bool exists = false;
   int rbuf_index = find(name, &exists);
   if(rbuf_index == -1) {
