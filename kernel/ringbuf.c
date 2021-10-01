@@ -14,9 +14,7 @@ struct ringbuf {
   void *pa[R_BUF_SIZE];
 } rb_arr[MAX_R_BUFS];
 
-
-//TODO: need a lock for rbuf
-
+struct spinlock rbuf_lock; 
 
 //return 0 if name is valid, -1 if not.
 int validate_name(char* name) {
@@ -44,10 +42,11 @@ int find(char* name, bool* exists) {
 }
 
 
-int deallocate_pm(int pages, void* phy_addr) {
+int deallocate_pm(int pages, void** phy_addr) {
 
   for(int i=0;i<pages;i++) {
-    kfree(phy_addr+i);
+    //printf("deallocating physical memory: %p\n", *(phy_addr+i));
+    kfree(*(phy_addr+i));
   }
   return 0;
 }
@@ -67,33 +66,22 @@ int allocate_pm(int pages, void** phy_addr) {
 
 int update_rbuffer(char* name, int rbuf_index) {
 
-  rb_arr[rbuf_index].refcount += 1;
-  strncpy(rb_arr[rbuf_index].name, name, strlen(name));
-  if(allocate_pm(R_BUF_SIZE, rb_arr[rbuf_index].pa) != 0) {
+  if(allocate_pm(R_BUF_SIZE, rb_arr[rbuf_index].pa) != 0) { 
     return -1;
   }
+  rb_arr[rbuf_index].refcount += 1;
+  strncpy(rb_arr[rbuf_index].name, name, strlen(name));
   return 0;
 }
 
 //-- Virtual Address mapping
+//TEST
 void display_vm(pagetable_t pagetable, uint64 virt_addr, int pages) {
 
-  printf("start of display_vm %p\n", virt_addr);
-  /*
-  for(int i=0;i<pages/2;i++) {
-    uint64* tmp = (uint64*) virt_addr;
-    printf("tmp %p\n", tmp);
-    *tmp = (uint64) 344;
-  }
-  */
-  printf("stored values\n");
   for(int i=0;i<pages;i++) {
-    //uint64 *tmp = (uint64*) (virt_addr+i*4096);
     uint64 pa = walkaddr(pagetable, virt_addr+i*4096);
     printf("i: %d vm:  %p, pm: %p  \n", i+1, virt_addr+i*4096, pa);
-    //printf("i: %d vm:  %p, pm: %p %d \n", i+1, virt_addr+i*4096, pa, *tmp);
   }
-  printf("end of display_vm\n");
 }
 
 void unmap_va(uint64 virt_addr, int pages) {
@@ -117,8 +105,7 @@ int verify_va(pagetable_t pagetable, uint64 va, int pages) {
 
 int get_free_va(pagetable_t pagetable, uint64* virt_addr, int pages) {
   
-  uint64 start_addr = MAXVA - 36*PG_SZ; // 1 trampoline, 1 trapframe, leaving 1 page for safety
-
+  uint64 start_addr = MAXVA - (3+pages)*PG_SZ; // 1 trampoline, 1 trapframe, leaving 1 page for safety
   int retries = 10;
   uint64 gap = 50*PG_SZ;
   int i	= 0;
@@ -181,9 +168,12 @@ int create_va(pagetable_t pagetable, uint64* virt_addr, int rb_index, int phy_pa
   if(map_va(pagetable, rb_arr[rb_index].pa, &ptr, phy_pages) != 0) {
     return -1;
   }
+  
+  // TEST
   printf("virtual address after mapping: %p\n", ptr);
   display_vm(pagetable, ptr, phy_pages*2-1);
   unmap_va(ptr, 2*phy_pages-1);
+  //---
   *virt_addr = ptr;
   return 0;
 }
@@ -198,35 +188,40 @@ void display_pm(int pages, int rbuf_index) {
 
 
 //TODO: rename to a generic one
-uint64
-create_ringbuf(char* name, uint64* vm_addr) {
+uint64 create_ringbuf(char* name, uint64* vm_addr) {
 
   if(validate_name(name) != 0) {
     printf("Ring buffer name is not valid\n");
     return -1;
   }
+  acquire(&rbuf_lock);
   bool exists = false;
   int rbuf_index = find(name, &exists);
   if(rbuf_index == -1) {
     printf("No free ring buffers are available\n");
+    release(&rbuf_lock);
     return -1;
   }
   if(!exists) {
     if(update_rbuffer(name, rbuf_index) != 0) {
       printf("unable to allocate physical memory\n");
+      release(&rbuf_lock);
       return -1;
     }
-    printf("Received a free index: %d for name: %s\n", rbuf_index, name);
+    //printf("Received a free index: %d for name: %s\n", rbuf_index, name);
   }
   struct proc *p = myproc();
   uint64 va;
   if(create_va(p->pagetable, &va, rbuf_index, R_BUF_SIZE) != 0) {
     printf("unable to map virtual memory address\n");
-    //TODO: cleanup
+    deallocate_pm(R_BUF_SIZE, rb_arr[rbuf_index].pa);
+    rb_arr[rbuf_index].refcount -= 1;
+    //display_pm(R_BUF_SIZE, rbuf_index);
+    release(&rbuf_lock);
     return -1;
   }
   vm_addr = (uint64*)va;
-  printf("ending mapping allocation\n");
+  release(&rbuf_lock);
   return 0;
 }
 
