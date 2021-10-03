@@ -90,6 +90,11 @@ void unmap_va(uint64 virt_addr, int pages) {
     return;
   }
   struct proc *p = myproc();
+
+  if(walkaddr(p->pagetable, virt_addr) == 0) {
+    printf("The mentioned pages are not allocated.\n");
+    return;
+  }
   uvmunmap(p->pagetable, virt_addr, pages, 0);
 }
 
@@ -146,7 +151,7 @@ int create_va(pagetable_t pagetable, uint64* virt_addr, int rb_index, int phy_pa
   if(map_va(pagetable, rb_arr[rb_index].pa, &ptr, phy_pages) != 0) {
     return -1;
   }
-  display_vm(pagetable, ptr, phy_pages*2-1);
+  //display_vm(pagetable, ptr, phy_pages*2-1);
   *virt_addr = ptr;
   return 0;
 }
