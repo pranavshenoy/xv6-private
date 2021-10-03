@@ -162,6 +162,7 @@ void display_pm(int pages, int rbuf_index) {
 
 void close_rbuf(char* name, uint64 va) {
 
+  printf("closing the virtual address of ring buffer\n");
   bool exists = false;
   int rbuf_index = find(name, &exists);
   if(!exists) {
@@ -181,6 +182,7 @@ void close_rbuf(char* name, uint64 va) {
 
 //TODO: rename to a generic one
 //vm_addr must contain the virtual address during the close operation 
+//if op == 1, close the connection
 uint64 create_ringbuf(char* name, uint64* vm_addr, int op) {
 
   if(validate_name(name) != 0) {
@@ -221,7 +223,8 @@ uint64 create_ringbuf(char* name, uint64* vm_addr, int op) {
   }
   strncpy(p->rbuf_name, name, strlen(name));
   p->rbuf_va = va;
-  vm_addr = (uint64*)va;
+  *vm_addr = va;
+  printf("sending address to user vm_addr: %p, va: %p\n", *vm_addr, va);
   release(&rbuf_lock);
   return 0;
 }

@@ -501,6 +501,14 @@ sys_ringbuf(void) {
   if(argint(2, &op) < 0) {
     return -1;
   }
-  int res = create_ringbuf(name, &vm_addr, op);
-  return res;
+  uint64 va;
+  if(create_ringbuf(name, &va, op) != 0) {
+    printf("Failed to perform create/delete operation\n");
+    return -1;
+  }
+  if(copyout(myproc()->pagetable, vm_addr, (char*)&va, sizeof(uint64)) < 0) {
+    printf("Failed to perform copyout operation\n");
+    return -1;
+  }
+  return 0;
 }
