@@ -2,8 +2,8 @@
 
 struct ringbook
 {
-  uint64* read;
-  uint64* write;
+  uint64 read;
+  uint64 write;
 };
 
 struct user_ring_buf {
@@ -45,8 +45,8 @@ int create_ring_buffer(char *name) {
     }
     uint64* start = (uint64*) vm_addr;
     struct ringbook book;
-    book.read=start;
-    book.write=start;
+    book.read=0;
+    book.write=0;
     *(start+32*512) = &book;
     int empty_slot=-1;
     for(int i=0;i<MAX_RINGBUFS;i++){
@@ -82,10 +82,9 @@ int delete_ring_buffer(char *name){
     return 0;
 }
 
-void ringbuf_start_read(char *name, uint64 **addr, int *bytes) {
-    int index=find(name);
+void ringbuf_start_read(int index, uint64 **addr, int *bytes) {
     if(index==-1){
-      printf("Ring buffer %s not found.\n",name);
+      printf("Ring buffer not found.\n");
       return;
     }
     uint64* start=user_ring_bufs[index].addr;
@@ -95,10 +94,9 @@ void ringbuf_start_read(char *name, uint64 **addr, int *bytes) {
     bytes=(write-read)%(RINGBUF_SIZE*PG_SIZE);
 }
 
-void ringbuf_finish_read(char *name, int bytes) {
-    int index=find(name);
+void ringbuf_finish_read(int index, int bytes) {
     if(index==-1){
-      printf("Ring buffer %s not found.\n",name);
+      printf("Ring buffer not found.\n");
       return;
     }
     uint64* start=user_ring_bufs[index].addr;
@@ -106,10 +104,9 @@ void ringbuf_finish_read(char *name, int bytes) {
     store(start+32*512,(read+bytes)%(RINGBUF_SIZE*PG_SIZE));
 }
 
-void ringbuf_start_write(char *name, uint64 **addr, int *bytes) {
-    int index=find(name);
+void ringbuf_start_write(int index, uint64 **addr, int *bytes) {
     if(index==-1){
-      printf("Ring buffer %s not found.\n",name);
+      printf("Ring buffer not found.\n");
       return;
     }
     uint64* start=user_ring_bufs[index].addr;
@@ -119,10 +116,9 @@ void ringbuf_start_write(char *name, uint64 **addr, int *bytes) {
     bytes=(read-write)%(RINGBUF_SIZE*PG_SIZE);
 }
 
-void ringbuf_finish_write(char *name, int bytes) {
-    int index=find(name);
+void ringbuf_finish_write(int index, int bytes) {
     if(index==-1){
-      printf("Ring buffer %s not found.\n",name);
+      printf("Ring buffer not found.\n");
       return;
     }
     uint64* start=user_ring_bufs[index].addr;
