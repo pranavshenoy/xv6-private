@@ -1,6 +1,6 @@
-#include "../kernel/types.h"
-#include "../kernel/stat.h"
-#include "user.h" 
+#include "kernel/types.h"
+#include "kernel/stat.h"
+#include "user/user.h" 
 #include "ringbuf.h"
 
 #define SIZE 128        // size of each int array, containing 512 bytes
@@ -24,10 +24,10 @@ int main(void)
         for(int r=0;r<LOOP;r++)
         {
             uint64 rbytes=0;
-            uint64 addr;
+            uint64* addr;
             int bytes;
             for(int i=0;i<SIZE;i++){
-                ringbuf_start_read(index,addr,bytes);
+                ringbuf_start_read(index,&addr,&bytes);
                 uint64 res=load(addr+i);
                 if(res!=rbytes)
                 {
@@ -49,10 +49,10 @@ int main(void)
         uint64 wbytes=0;   // count number of written bytes
         for(int w=0;w<LOOP;w++)
         {
-            uint64 addr;
+            uint64* addr;
             int bytes;
             for(int i=0;i<SIZE;i++){
-                ringbuf_start_write(index,addr,bytes);
+                ringbuf_start_write(index,&addr,&bytes);
                 store(addr+i,wbytes);
                 wbytes++;
                 ringbuf_finish_write(index,1);

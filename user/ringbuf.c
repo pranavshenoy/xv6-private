@@ -1,4 +1,5 @@
 #include "ringbuf.h"
+#include "user.h"
 
 struct ringbook
 {
@@ -11,6 +12,16 @@ struct user_ring_buf {
   uint64* addr;
   int exists;
 }user_ring_bufs[MAX_RINGBUFS];
+
+int
+strncmp(const char *p, const char *q, uint n)
+{
+  while(n > 0 && *p && *p == *q)
+    n--, p++, q++;
+  if(n == 0)
+    return 0;
+  return (uchar)*p - (uchar)*q;
+}
 
 // It writes v into *p.
 void store(uint64 *p, uint64 v) {
@@ -47,7 +58,9 @@ int create_ring_buffer(char *name) {
     struct ringbook book;
     book.read=0;
     book.write=0;
-    *(start+32*512) = &book;
+    // *(start) = book.
+    *(start+32*512) = book.read;
+    *(start+32*512+8) = book.write;
     int empty_slot=-1;
     for(int i=0;i<MAX_RINGBUFS;i++){
         if(user_ring_bufs[i].exists==0){
@@ -74,7 +87,7 @@ int delete_ring_buffer(char *name){
       printf("Ring buffer %s not found.\n",name);
       return -1;
     }
-    int res = create_ringbuf(name,user_ring_bufs[index].addr,1);
+    int res = ringbuf(name,user_ring_bufs[index].addr,1);
     if(res==-1) {
       return -1;
     }
@@ -90,8 +103,8 @@ void ringbuf_start_read(int index, uint64 **addr, int *bytes) {
     uint64* start=user_ring_bufs[index].addr;
     uint64 read=load(start+32*512);   //  load 'read' from 'book' 
     uint64 write=load(start+32*512+8);    // load 'write' from 'book'
-    addr=read;
-    bytes=(write-read)%(RINGBUF_SIZE*PG_SIZE);
+    *addr=*addr+read;
+    *bytes=(write-read)%(RINGBUF_SIZE*PG_SIZE);
 }
 
 void ringbuf_finish_read(int index, int bytes) {
@@ -112,8 +125,8 @@ void ringbuf_start_write(int index, uint64 **addr, int *bytes) {
     uint64* start=user_ring_bufs[index].addr;
     uint64 read=load(start+32*512);   //  load 'read' from 'book' 
     uint64 write=load(start+32*512+8);    // load 'write' from 'book'
-    addr=write;
-    bytes=(read-write)%(RINGBUF_SIZE*PG_SIZE);
+    *addr=*addr+write;
+    *bytes=(read-write)%(RINGBUF_SIZE*PG_SIZE);
 }
 
 void ringbuf_finish_write(int index, int bytes) {
