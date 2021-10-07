@@ -135,6 +135,7 @@ UPROGS=\
 	$U/_wc\
 	$U/_zombie\
 	$U/_ringbuftest\
+	$U/_ringbuf\
 	$U/_ringtest\
 
 fs.img: mkfs/mkfs README $(UPROGS)
