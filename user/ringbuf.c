@@ -96,19 +96,19 @@ int delete_ring_buffer(char *name){
 }
 
 void ringbuf_start_read(int index, uint64 **addr, int *bytes) {
-    if(index==-1){
+    if(index<0||index>=MAX_RINGBUFS){
       printf("Ring buffer not found.\n");
       return;
     }
     uint64* start=user_ring_bufs[index].addr;
     uint64 read=load(start+32*512);   //  load 'read' from 'book' 
     uint64 write=load(start+32*512+8);    // load 'write' from 'book'
-    *addr=*addr+read;
+    *addr=start+read;
     *bytes=(write-read)%(RINGBUF_SIZE*PG_SIZE);
 }
 
 void ringbuf_finish_read(int index, int bytes) {
-    if(index==-1){
+    if(index<0||index>=MAX_RINGBUFS){
       printf("Ring buffer not found.\n");
       return;
     }
@@ -118,19 +118,19 @@ void ringbuf_finish_read(int index, int bytes) {
 }
 
 void ringbuf_start_write(int index, uint64 **addr, int *bytes) {
-    if(index==-1){
+    if(index<0||index>=MAX_RINGBUFS){
       printf("Ring buffer not found.\n");
       return;
     }
     uint64* start=user_ring_bufs[index].addr;
     uint64 read=load(start+32*512);   //  load 'read' from 'book' 
     uint64 write=load(start+32*512+8);    // load 'write' from 'book'
-    *addr=*addr+write;
-    *bytes=(read-write)%(RINGBUF_SIZE*PG_SIZE);
+    *addr=start+write;
+    *bytes=(read-(write+1))%(RINGBUF_SIZE*PG_SIZE)+1;
 }
 
 void ringbuf_finish_write(int index, int bytes) {
-    if(index==-1){
+    if(index<0||index>=MAX_RINGBUFS){
       printf("Ring buffer not found.\n");
       return;
     }
