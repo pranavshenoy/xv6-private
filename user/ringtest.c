@@ -8,13 +8,31 @@
 #define DATA_SIZE 10
 #define NAME "test"
 
+
+//returns the bytes written to fd
+int write_buf(int fd, int bytes) {
+  
+  return 0;
+}
+
+int read_buf(int fd, int bytes) {
+
+  
+  return 0;
+}
+
+
 int main(void)
 {
-    int index=create_ring_buffer(NAME);
+  
+    int index=create_ring_buffer("test");
     if(index==-1){
         printf("create error\n");
         exit(1);
     }
+    
+
+    /*
     uint64* addr;
     int bytes;
     for(int i=0;i<DATA_SIZE;i++){
@@ -88,5 +106,6 @@ int main(void)
     }
     
     exit(0);
+    */
     return 0;
 }

@@ -10,8 +10,38 @@ struct ringbook
 struct user_ring_buf {
   char *name;
   uint64* addr;
-  int exists;
+  int refcount;
 }user_ring_bufs[MAX_RINGBUFS];
+
+
+//Code from string.c
+
+char*
+strncpy(char *s, const char *t, int n)
+{
+  char *os;
+
+  os = s;
+  while(n-- > 0 && (*s++ = *t++) != 0)
+    ;
+  while(n-- > 0)
+    *s++ = 0;
+  return os;
+}
+
+char*
+safestrcpy(char *s, const char *t, int n)
+{
+  char *os;
+
+  os = s;
+  if(n <= 0)
+    return os;
+  while(--n > 0 && (*s++ = *t++) != 0)
+    ;
+  *s = 0;
+  return os;
+}
 
 int
 strncmp(const char *p, const char *q, uint n)
@@ -35,50 +65,71 @@ int load(uint64 *p) {
 
 // find the position of ring buffer by name
 int find(char* name) {
-    int index=-1;
     for(int i=0;i<MAX_RINGBUFS;i++) {
         if(strncmp(name, user_ring_bufs[i].name, strlen(name)) == 0) {
-            if(user_ring_bufs[i].exists==1)
-                index=i;
+            if(user_ring_bufs[i].refcount > 0)
+              return i;
         }
     }
-    return index;
+    return -1;
+}
+
+int buf_slot() {
+  for(int i=0;i<MAX_RINGBUFS;i++) {
+    if(user_ring_bufs[i].refcount == 0) {
+      return i;
+    }
+  }
+  return -1;
 }
 
 // invokes ringbuf(name, addr, 0)
 // return -1 on fail
 // otherwise return ring buffer descriptor
 int create_ring_buffer(char *name) {
+
+  //TODO: lock for user_ring_buf
+  
+  int index = find(name);
+  if(index == -1) {
+    index = buf_slot();
+    if(index == -1) {
+      //TODO: add log
+      return -1;
+    }
+  }
+  if(user_ring_bufs[index].refcount == 2) {
+    //TODO: add log
+    return -1;
+  }
+  
     uint64 vm_addr;
     int res = ringbuf(name,&vm_addr,0);
     if(res==-1) {
-        return -1;
+      printf("Failed to create a ringbuf\n");
+      return -1;
     }
+    
     uint64* start = (uint64*) vm_addr;
     struct ringbook book;
     book.read=0;
     book.write=0;
-    // *(start) = book.
-    *(start+32*512) = book.read;
-    *(start+32*512+8) = book.write;
-    int empty_slot=-1;
-    for(int i=0;i<MAX_RINGBUFS;i++){
-        if(user_ring_bufs[i].exists==0){
-            user_ring_bufs[i].name=name;
-            user_ring_bufs[i].addr=start;
-            user_ring_bufs[i].exists=1;
-            empty_slot=i;
-            break;
-        }
-    }
-    if(empty_slot==-1){
-      printf("Ring buffers are full.\n");
-      return -1;
-    } else {
-      return empty_slot;
-    }
+    memcpy((start + 32*512), &book, sizeof(struct ringbook));
+    
+    safestrcpy(user_ring_bufs[index].name, name, strlen(name));
+    user_ring_bufs[index].refcount += 1;
+    user_ring_bufs[index].addr = start;
+    
+    
+    //TEST: verification
+    struct ringbook *booktest;
+    booktest = (struct ringbook*) (start + 32*512);
+    printf("Book: %d %d\n", booktest->read, booktest->write);
+    
+    return index;   
 }
 
+/*
 // invokes create_ringbuf(name, addr, 1)
 // return -1 on fail
 int delete_ring_buffer(char *name){
@@ -94,7 +145,7 @@ int delete_ring_buffer(char *name){
     user_ring_bufs[index].exists=0;
     return 0;
 }
-
+*/
 void ringbuf_start_read(int index, uint64 **addr, int *bytes) {
     if(index<0||index>=MAX_RINGBUFS){
       printf("Ring buffer not found.\n");
