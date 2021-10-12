@@ -98,9 +98,15 @@ int create_ring_buffer(char *name) {
       return -1;
     }
   }
-  if(user_ring_bufs[index].refcount == 2) {
-    //TODO: add log
-    return -1;
+  else{
+    if(user_ring_bufs[index].refcount == 2) {
+      //TODO: add log
+      return -1;
+    }
+    else if(user_ring_bufs[index].refcount == 1){
+      user_ring_bufs[index].refcount += 1;
+      return index;
+    }
   }
   
     uint64 vm_addr;
@@ -116,20 +122,21 @@ int create_ring_buffer(char *name) {
     book.write=0;
     memcpy((start + 32*512), &book, sizeof(struct ringbook));
     
-    safestrcpy(user_ring_bufs[index].name, name, strlen(name));
+    //safestrcpy(user_ring_bufs[index].name, name, strlen(name));
+    user_ring_bufs[index].name=name;
     user_ring_bufs[index].refcount += 1;
     user_ring_bufs[index].addr = start;
     
     
     //TEST: verification
-    struct ringbook *booktest;
+    /*struct ringbook *booktest;
     booktest = (struct ringbook*) (start + 32*512);
-    printf("Book: %d %d\n", booktest->read, booktest->write);
+    printf("Book: %d %d\n", booktest->read, booktest->write);*/
     
     return index;   
 }
 
-/*
+
 // invokes create_ringbuf(name, addr, 1)
 // return -1 on fail
 int delete_ring_buffer(char *name){
@@ -142,19 +149,21 @@ int delete_ring_buffer(char *name){
     if(res==-1) {
       return -1;
     }
-    user_ring_bufs[index].exists=0;
+    user_ring_bufs[index].refcount--;
     return 0;
 }
-*/
+
 void ringbuf_start_read(int index, uint64 **addr, int *bytes) {
     if(index<0||index>=MAX_RINGBUFS){
       printf("Ring buffer not found.\n");
       return;
     }
     uint64* start=user_ring_bufs[index].addr;
-    uint64 read=load(start+32*512);   //  load 'read' from 'book' 
-    uint64 write=load(start+32*512+8);    // load 'write' from 'book'
-    *addr=start+read;
+    struct ringbook *booktest;
+    booktest = (struct ringbook*) (start + 32*512);
+    uint64 read=load(&booktest->read);   //  load 'read' from 'book' 
+    uint64 write=load(&booktest->write);    // load 'write' from 'book'
+    *addr=start+(read/sizeof(uint64))%(RINGBUF_SIZE*PG_SIZE/sizeof(uint64))+RINGBUF_SIZE*PG_SIZE/sizeof(uint64);
     *bytes=(write-read)%(RINGBUF_SIZE*PG_SIZE);
 }
 
@@ -164,8 +173,10 @@ void ringbuf_finish_read(int index, int bytes) {
       return;
     }
     uint64* start=user_ring_bufs[index].addr;
-    uint64 read=load(start+32*512);   //  load 'read' from 'book' 
-    store(start+32*512,(read+bytes)%(RINGBUF_SIZE*PG_SIZE));
+    struct ringbook *booktest;
+    booktest = (struct ringbook*) (start + 32*512);
+    uint64 read=load(&booktest->read);   //  load 'read' from 'book' 
+    store(&booktest->read,read+bytes);
 }
 
 void ringbuf_start_write(int index, uint64 **addr, int *bytes) {
@@ -174,9 +185,11 @@ void ringbuf_start_write(int index, uint64 **addr, int *bytes) {
       return;
     }
     uint64* start=user_ring_bufs[index].addr;
-    uint64 read=load(start+32*512);   //  load 'read' from 'book' 
-    uint64 write=load(start+32*512+8);    // load 'write' from 'book'
-    *addr=start+write;
+    struct ringbook *booktest;
+    booktest = (struct ringbook*) (start + 32*512);
+    uint64 read=load(&booktest->read);   //  load 'read' from 'book' 
+    uint64 write=load(&booktest->write);    // load 'write' from 'book'
+    *addr=start+(write/sizeof(uint64))%(RINGBUF_SIZE*PG_SIZE/sizeof(uint64));
     *bytes=(read-(write+1))%(RINGBUF_SIZE*PG_SIZE)+1;
 }
 
@@ -186,6 +199,8 @@ void ringbuf_finish_write(int index, int bytes) {
       return;
     }
     uint64* start=user_ring_bufs[index].addr;
-    uint64 write=load(start+32*512+8);    // load 'write' from 'book'
-    store(start+32*512+8,(write+bytes)%(RINGBUF_SIZE*PG_SIZE));
+    struct ringbook *booktest;
+    booktest = (struct ringbook*) (start + 32*512);
+    uint64 write=load(&booktest->write);    // load 'write' from 'book'
+    store(&booktest->write,write+bytes);
 }

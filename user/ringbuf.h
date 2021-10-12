@@ -2,6 +2,7 @@
 #include "../kernel/types.h"
 
 #define RINGBUF_SIZE 16
+#define RINGBUF_NAME_SIZE 16
 #define MAX_RINGBUFS 10
 #define PG_SIZE 4096
 

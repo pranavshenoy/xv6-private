@@ -69,7 +69,7 @@ int update_rbuffer(char* name, int rbuf_index) {
   if(allocate_pm(R_BUF_SIZE, rb_arr[rbuf_index].pa) != 0) { 
     return -1;
   }
-  rb_arr[rbuf_index].refcount += 1;
+  //rb_arr[rbuf_index].refcount += 1;
   strncpy(rb_arr[rbuf_index].name, name, strlen(name));
   return 0;
 }
@@ -221,6 +221,7 @@ uint64 create_ringbuf(char* name, uint64* vm_addr, int op) {
     return -1;
   }
   uint64 va;
+  rb_arr[rbuf_index].refcount += 1;
   if(create_va(p->pagetable, &va, rbuf_index, R_BUF_SIZE) != 0) {
     printf("unable to map virtual memory address\n");
     deallocate_pm(R_BUF_SIZE, rb_arr[rbuf_index].pa);
