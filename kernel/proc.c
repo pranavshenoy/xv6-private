@@ -5,10 +5,16 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include <stddef.h>
 
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
+
+struct proc* ready_queue;
+struct proc* rq_head;
+struct proc* rq_tail;
+struct spinlock ready_queue_lock;
 
 struct proc *initproc;
 
@@ -17,6 +23,7 @@ struct spinlock pid_lock;
 
 extern void forkret(void);
 static void freeproc(struct proc *p);
+void schedule(struct proc* p);
 
 extern char trampoline[]; // trampoline.S
 
@@ -50,6 +57,7 @@ procinit(void)
   
   initlock(&pid_lock, "nextpid");
   initlock(&wait_lock, "wait_lock");
+  initlock(&ready_queue_lock, "rq_lock");
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
       p->kstack = KSTACK((int) (p - proc));
@@ -243,8 +251,11 @@ userinit(void)
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
-
+  //printf("inside userinit\n");
+  schedule(p);
   release(&p->lock);
+  //printf("inside userinit\n");
+  //schedule(p);
 }
 
 // Grow or shrink user memory by n bytes.
@@ -314,6 +325,8 @@ fork(void)
   acquire(&np->lock);
   np->state = RUNNABLE;
   release(&np->lock);
+  //printf("inside fork\n");
+  schedule(np);
 
   return pid;
 }
@@ -427,6 +440,35 @@ wait(uint64 addr)
   }
 }
 
+void test_display() {
+
+  struct proc* ptr = rq_head;
+  while(ptr) {
+    printf("pid: %d ", ptr->pid);
+    ptr = ptr->rq_next;
+  }
+  printf("\n");
+  
+}
+
+
+
+void schedule(struct proc* p) {
+
+  acquire(&ready_queue_lock);
+  //printf("adding process to linked list\n");
+  if(rq_tail == NULL) {
+    rq_tail = p;
+    rq_head = p;
+  } else {
+    rq_tail->rq_next = p;
+    rq_tail = rq_tail->rq_next;
+  }
+  //printf("rq_head: %d", rq_head->pid);
+  //test_display();
+  release(&ready_queue_lock);
+}
+
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
@@ -437,7 +479,7 @@ wait(uint64 addr)
 void
 scheduler(void)
 {
-  struct proc *p;
+  //struct proc *p;
   struct cpu *c = mycpu();
   
   c->proc = 0;
@@ -445,6 +487,29 @@ scheduler(void)
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
 
+    acquire(&ready_queue_lock);
+    if(rq_head == NULL) {
+      //printf("no process to schedule\n");
+      release(&ready_queue_lock);
+      continue;
+    }
+    struct proc *curr_proc = rq_head;
+    rq_head = rq_head->rq_next;
+    curr_proc->rq_next = NULL;
+    if(rq_head == NULL) {
+      rq_tail = NULL;
+    }
+    release(&ready_queue_lock);
+
+    //printf("scheduling one process: %d\n", curr_proc->pid);
+    acquire(&curr_proc->lock);
+    curr_proc->state = RUNNING;
+    c->proc = curr_proc;
+    swtch(&c->context, &curr_proc->context);
+    c->proc = 0;
+    release(&curr_proc->lock);
+    //release(&ready_queue_lock);
+    /*
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
       if(p->state == RUNNABLE) {
@@ -461,6 +526,7 @@ scheduler(void)
       }
       release(&p->lock);
     }
+    */
   }
 }
 
@@ -477,6 +543,7 @@ sched(void)
   int intena;
   struct proc *p = myproc();
 
+  //printf("noff: %d\n", mycpu()->noff);
   if(!holding(&p->lock))
     panic("sched p->lock");
   if(mycpu()->noff != 1)
@@ -498,6 +565,8 @@ yield(void)
   struct proc *p = myproc();
   acquire(&p->lock);
   p->state = RUNNABLE;
+  //printf("inside yield\n");
+  schedule(p);
   sched();
   release(&p->lock);
 }
@@ -566,6 +635,8 @@ wakeup(void *chan)
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
         p->state = RUNNABLE;
+        //printf("inside wakeup\n");
+        schedule(p);
       }
       release(&p->lock);
     }
@@ -587,6 +658,8 @@ kill(int pid)
       if(p->state == SLEEPING){
         // Wake process from sleep().
         p->state = RUNNABLE;
+        //printf("inside kill\n");
+        schedule(p);
       }
       release(&p->lock);
       return 0;
