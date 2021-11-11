@@ -20,20 +20,26 @@ void multiple_fork(int count, int fd) {
       } else {
         printf("Total processes waiting: %d\n", count);
       }
+      close(fd);
+      exit(0);
     } else {
-      break;
+      continue;
     }
   }
+  
 }
 
 
 int main() {
 
   int fd = open("barrier0", O_RDWR); 
-  multiple_fork(10, fd);
+  multiple_fork(2, fd);
   sleep(10);
+  
   int dummy = 5;
   write(fd, &dummy, 4);
+  close(fd);
   printf("done writing \n");
+  
   return 0;
 }
