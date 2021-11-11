@@ -15,16 +15,17 @@ int
 main(void)
 {
   int pid, wpid;
-
   if(open("console", O_RDWR) < 0){
     mknod("console", CONSOLE, 0);
     open("console", O_RDWR);
   }
+
+   mknod("rdcycle", DEV_CYCLE, 0);
+/*
   if(open("rdcycle", O_RDWR) < 0){
-    //printf("initialising rdcycle\n");
     mknod("rdcycle", DEV_CYCLE, 0);
-    open("rdcycle", O_RDWR);
   }
+*/  
   dup(0);  // stdout
   dup(0);  // stderr
 

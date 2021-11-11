@@ -18,21 +18,28 @@ unsigned long rdcycle(void) {
 }
 
 int
-cyclewrite(int user_src, uint64 src, int n) {
-  printf("trying to write to rdcycle device\n");
+cyclewrite(int user_src, uint64 src, int n, int minor) {
+
+  /*
+  int i;
+  for(i = 0; i < n; i++){
+    char c;
+    if(either_copyin(&c, user_src, src+i, 1) == -1)
+      break;
+    //uartputc(c);
+  }
+  */
   return -1;
 }
 
 int
-cycleread(int user_dst, uint64 dst, int n) {
+cycleread(int user_dst, uint64 dst, int n, int minor) {
 
-  printf("reading rdcycle\n");
   if(n != 8) {
     printf("number of bytes is not 8!\n");
     return -1;
   }
   unsigned long cycle = rdcycle();
-  printf("cycles from kernel: %d \n", cycle);
   if(either_copyout(user_dst, dst, &cycle, 8) == -1) {
     printf("unable to copy data to user process\n");
     return -1;

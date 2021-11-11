@@ -13,13 +13,13 @@ int main() {
 
   int fd = open("rdcycle", O_RDWR); //giving both permission to test write as well
   int n = 5;
-  while(n--) {
+  while(--n) {
     unsigned long cycle;
     int res = read(fd, &cycle, 8);
     if(res == -1) {
       printf("read failed\n");
     } else {
-      printf("cycles: %ld", cycle);
+      printf("cycles: %p\n", cycle);
     }
   }
   return 0;
