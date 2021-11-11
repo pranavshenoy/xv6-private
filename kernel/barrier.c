@@ -44,16 +44,14 @@ barrierread(int user_dst, uint64 dst, int n, int minor) {
   printf("Process going to sleep. Barrier id: %d  \n", minor);
   sleep(&b[minor], &b[minor].lock);
   printf("Process woke up. Barrier id: %d\n", minor);
-/*
   if(either_copyout(user_dst, dst, &(myproc()->barrier_wait_count), 4) == -1) {
     myproc()->barrier_wait_count = 0;
     printf("unable to copy data to user process\n");
     release(&b[minor].lock);
     return -1;
   }
-*/
   printf("total process waiting: %d\n", myproc()->barrier_wait_count);
-  myproc()->barrier_wait_count = 0;
+  //myproc()->barrier_wait_count = 0;
   release(&b[minor].lock);
   return 0;
 }

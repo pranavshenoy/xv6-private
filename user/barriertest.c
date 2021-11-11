@@ -32,13 +32,17 @@ void multiple_fork(int count, int fd) {
 
 int main() {
 
-  int fd = open("barrier0", O_RDWR); 
-  multiple_fork(2, fd);
-  sleep(10);
   
+  int fd = open("barrier1", O_RDWR); 
+  multiple_fork(10, fd);
+  int fd2 = open("barrier3", O_RDWR);
+  multiple_fork(15, fd2);
+  sleep(50);
   int dummy = 5;
   write(fd, &dummy, 4);
+  write(fd2, &dummy, 4);
   close(fd);
+  close(fd2);
   printf("done writing \n");
   
   return 0;
