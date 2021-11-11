@@ -29,8 +29,8 @@ OBJS = \
   $K/kernelvec.o \
   $K/plic.o \
   $K/virtio_disk.o \
-  $K/cycle.o
-
+  $K/cycle.o \
+  $K/barrier.o \
 # riscv64-unknown-elf- or riscv64-linux-gnu-
 # perhaps in /opt/riscv/bin
 #TOOLPREFIX = 
@@ -134,6 +134,7 @@ UPROGS=\
 	$U/_wc\
 	$U/_zombie\
 	$U/_rdcycletest\
+	$U/_barriertest\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

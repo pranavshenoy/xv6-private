@@ -42,6 +42,21 @@ proc_mapstacks(pagetable_t kpgtbl) {
   }
 }
 
+void barrier_count(void* chan, int p_count) {
+  struct proc *p;
+  for(p = proc; p < &proc[NPROC]; p++) {
+    if(p != myproc()){
+      acquire(&p->lock);
+      if(p->state == SLEEPING && p->chan == chan) {
+        p->barrier_wait_count = p_count;
+        p->state = RUNNABLE;
+      }
+      release(&p->lock);
+    }
+  }
+}
+
+
 // initialize the proc table at boot time.
 void
 procinit(void)

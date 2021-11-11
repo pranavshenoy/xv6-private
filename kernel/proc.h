@@ -27,6 +27,7 @@ struct cpu {
 };
 
 extern struct cpu cpus[NCPU];
+void barrier_count(void* chan, int p_count);
 
 // per-process data for the trap handling code in trampoline.S.
 // sits in a page by itself just under the trampoline page in the
@@ -96,6 +97,7 @@ struct proc {
   // proc_tree_lock must be held when using this:
   struct proc *parent;         // Parent process
 
+  int barrier_wait_count;      // processes waiting on the current barrier
   // these are private to the process, so p->lock need not be held.
   uint64 kstack;               // Virtual address of kernel stack
   uint64 sz;                   // Size of process memory (bytes)

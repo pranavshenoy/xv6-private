@@ -10,6 +10,30 @@
 #include "kernel/fcntl.h"
 
 char *argv[] = { "sh", 0 };
+/*
+const char* get_barrier_name(int barrier) {
+
+  switch(barrier) {
+  case 0: return "barrier0";
+  case 1: return "barrier1";
+  case 2: return "barrier2";
+  }
+  return "";
+}
+*/
+void init_barriers() {
+
+  mknod("barrier0", DEV_BARRIER, 0);
+  mknod("barrier1", DEV_BARRIER, 1);
+  mknod("barrier2", DEV_BARRIER, 2);
+  mknod("barrier3", DEV_BARRIER, 3);
+  mknod("barrier4", DEV_BARRIER, 4);
+  mknod("barrier5", DEV_BARRIER, 5);
+  mknod("barrier6", DEV_BARRIER, 6);
+  mknod("barrier7", DEV_BARRIER, 7);
+  mknod("barrier8", DEV_BARRIER, 8);
+  mknod("barrier9", DEV_BARRIER, 9);
+}
 
 int
 main(void)
@@ -20,12 +44,9 @@ main(void)
     open("console", O_RDWR);
   }
 
-   mknod("rdcycle", DEV_CYCLE, 0);
-/*
-  if(open("rdcycle", O_RDWR) < 0){
-    mknod("rdcycle", DEV_CYCLE, 0);
-  }
-*/  
+  mknod("rdcycle", DEV_CYCLE, 0);
+  init_barriers();
+  
   dup(0);  // stdout
   dup(0);  // stderr
 

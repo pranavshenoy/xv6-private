@@ -39,4 +39,5 @@ struct devsw {
 extern struct devsw devsw[];
 
 #define CONSOLE 1
-#define DEV_CYCLE  5
+#define DEV_CYCLE  2
+#define DEV_BARRIER 3
