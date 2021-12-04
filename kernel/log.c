@@ -44,12 +44,20 @@ struct log {
   int outstanding; // how many FS sys calls are executing.
   int committing;  // in commit(), please wait.
   int dev;
+  uint64 id;
   struct logheader lh;
 };
-struct log log;
+struct log log[NPARALLELLOGGING];
+
+uint64 commit_enqueue = 0, commit_dequeue = 0;
+struct spinlock commit_idx_lk;
 
 static void recover_from_log(void);
 static void commit();
+static void init_log_struct(int dev, struct superblock *sb);
+static void start_recovery();
+static void read_all_head();
+static void recover_from_logs();
 
 void
 initlog(int dev, struct superblock *sb)
@@ -58,21 +66,109 @@ initlog(int dev, struct superblock *sb)
     panic("initlog: too big logheader");
 
   initlock(&log.lock, "log");
-  log.start = sb->logstart;
-  log.size = sb->nlog;
-  log.dev = dev;
-  recover_from_log();
+  initlock(&commit_idx_lk, "commit index lock");
+  init_log_struct(dev, sb);
+  start_recovery();
 }
+
+//Utility function for enqueue and dequeue
+
+void increment_enqueue() {
+  acquire(&commit_idx_lk);
+  commit_enqueue++;
+  release(&commit_idx_lk);
+}
+
+void increment_dequeue() {
+  acquire(&commit_idx_lk);
+  commit_dequeue++;
+  release(&commit_idx_lk);
+}
+
+void set_enqueue(uint64 val) {
+
+  acquire(&commit_idx_lk);
+  commit_enqueue = val;
+  release(&commit_idx_lk);
+}
+
+void set_dequeue(uint64 val) {
+
+  acquire(&commit_idx_lk);
+  commit_dequeue = val;
+  release(&commit_idx_lk);
+}
+
+//--
+
+void get_min_max(int* arr) {
+
+  int minimum = 0, maximum = 0;
+  for(int i=0; i<NPARALLELLOGGING;i++) {
+    if(log[i].id == 0) {
+      continue;
+    }
+    if(minimum == 0) {
+      minimum = log[i].id;
+    }
+
+    minimum = min(minimum, log[i].id);
+    maximum = max(maximum, log[i].id);
+  }
+  arr[0] = minimum;
+  arr[1] = maximum;
+}
+
+void start_recovery() {
+
+  read_all_head();
+  int arr[2];
+  get_min_max(arr);
+  if(arr[0] == 0) {
+    set_enqueue(1);
+    set_dequeue(1);
+  } else {
+    set_enqueue(maximum);
+    set_dequeue(minimum);
+  }
+  recover_from_logs();
+}
+
+static void recover_from_logs() {
+
+  //dequeue <= enqueue
+  while(commit_dequeue <= commit_enqueue) {
+    recover_from_log();
+  }
+}
+
+static void read_all_head() {
+
+  for(int i=0; i<NPARALLELLOGGING;i++) {
+    read_head(i);
+  }
+}
+
+static void init_log_struct(int  dev, struct superblock *sb) {
+
+  for(int i=0; i<NPARALLELLOGGING;i++) {
+
+    log.start = sb->logstart + i*(sb->nlog);
+    log.size = (sb->nlog)/NPARALLELLOGGING;
+    log.dev = dev;
+  }  
+}
+
 
 // Copy committed blocks from log to their home location
 static void
-install_trans(int recovering)
+install_trans(int recovering, int idx)
 {
   int tail;
 
-  for (tail = 0; tail < log.lh.n; tail++) {
-    struct buf *lbuf = bread(log.dev, log.start+tail+1); // read log block
-    struct buf *dbuf = bread(log.dev, log.lh.block[tail]); // read dst
+  for (tail = 0; tail < log[idx].lh.n; tail++) {
+    struct buf *lbuf = bread(log[idx].dev, log[idx].start+tail+1); // read log block
+    struct buf *dbuf = bread(log[idx].dev, log[idx].lh.block[tail]); // read dst
     memmove(dbuf->data, lbuf->data, BSIZE);  // copy block to dst
     bwrite(dbuf);  // write dst to disk
     if(recovering == 0)
@@ -84,14 +180,14 @@ install_trans(int recovering)
 
 // Read the log header from disk into the in-memory log header
 static void
-read_head(void)
+read_head(int log_idx)
 {
-  struct buf *buf = bread(log.dev, log.start);
+  struct buf *buf = bread(log[log_idx].dev, log[log_idx].start);
   struct logheader *lh = (struct logheader *) (buf->data);
   int i;
-  log.lh.n = lh->n;
-  for (i = 0; i < log.lh.n; i++) {
-    log.lh.block[i] = lh->block[i];
+  log[log_idx].lh.n = lh->n;
+  for (i = 0; i < log[log_idx].lh.n; i++) {
+    log[log_idx].lh.block[i] = lh->block[i];
   }
   brelse(buf);
 }
@@ -100,26 +196,25 @@ read_head(void)
 // This is the true point at which the
 // current transaction commits.
 static void
-write_head(void)
+write_head(int idx)
 {
-  struct buf *buf = bread(log.dev, log.start);
+  struct buf *buf = bread(log[idx].dev, log[idx].start);
   struct logheader *hb = (struct logheader *) (buf->data);
   int i;
-  hb->n = log.lh.n;
-  for (i = 0; i < log.lh.n; i++) {
-    hb->block[i] = log.lh.block[i];
+  hb->n = log[idx].lh.n;
+  for (i = 0; i < log[idx].lh.n; i++) {
+    hb->block[i] = log[idx].lh.block[i];
   }
   bwrite(buf);
   brelse(buf);
 }
 
 static void
-recover_from_log(void)
+recover_from_log(int idx)
 {
-  read_head();
-  install_trans(1); // if committed, copy from log to disk
-  log.lh.n = 0;
-  write_head(); // clear the log
+  install_trans(idx, 1); // if committed, copy from log to disk
+  log[idx].lh.n = 0;
+  write_head(idx); // clear the log
 }
 
 // called at the start of each FS system call.
