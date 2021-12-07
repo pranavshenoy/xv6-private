@@ -48,7 +48,7 @@ struct log {
   uint64 id;
   struct logheader lh;
 };
-struct log log[end];
+struct log log[NPARALLELLOGGING];
 
 uint64 commit_enqueue = 0, commit_dequeue = 0;
 struct spinlock commit_idx_lk;
@@ -61,6 +61,8 @@ static void init_log_struct(int dev, struct superblock *sb);
 static void start_recovery();
 static void read_all_head();
 static void recover_from_logs();
+static void read_head(int log_idx);
+static void recover_from_log(int idx);
 
 void
 initlog(int dev, struct superblock *sb)
@@ -145,8 +147,8 @@ void start_recovery() {
     set_enqueue(1);
     set_dequeue(1);
   } else {
-    set_enqueue(maximum);
-    set_dequeue(minimum);
+    set_enqueue(arr[1]);
+    set_dequeue(arr[0]);
   }
   recover_from_logs();
 }
@@ -234,15 +236,15 @@ recover_from_log(int idx)
   write_head(idx); // clear the log
 }
 
-bool is_log_full(int idx) {
+int is_log_full(int idx) {
 	
 	acquire(&log[idx].lock);
 	if(log[idx].lh.n + (log[idx].outstanding+1)*MAXOPBLOCKS > LOGSIZE) {
 		release(&log[idx].lock);
-		return true;
+		return 1;
 	}
 	release(&log[idx].lock);
-	return false;
+	return 0;
 }
 
 //has commit lock already acquired
@@ -264,9 +266,9 @@ begin_op(void)
 			panic("more than 4 log structure at a time");
 		if(((commit_enqueue - commit_dequeue) == 4) && is_log_full(INDEX(commit_enqueue))) {
 			sleep(&commit_idx_lk, &commit_idx_lk);
-		} else if(commit_ready(INDEX(enqueue))) {
+		} else if(commit_ready(INDEX(commit_enqueue))) {
 			commit_enqueue++;
-		} else if(is_log_full(INDEX(enqueue))) {
+		} else if(is_log_full(INDEX(commit_enqueue))) {
 			commit_enqueue++;
 			break;
 		}
@@ -294,7 +296,7 @@ end_op(void)
 		return;
 	}
 	log[INDEX(id)].commit_ready = 1;
-	if(id == commit_queue) {  //TODO: lock?
+	if(id == commit_dequeue) {  //TODO: lock?
 		commit();
 		wakeup(&commit_idx_lk);
 		release(&log[INDEX(id)].lock);
@@ -337,14 +339,14 @@ write_log(int idx)
 static void
 commit(int idx)
 {
-  if(log[INDEX(id)].is_committing) {
+  if(log[INDEX(idx)].is_committing) {
 	return;  // no need to return status since some other process is handling it
   }
-  log[INDEX(id)].is_committing = 1;
+  log[INDEX(idx)].is_committing = 1;
   if (log[idx].lh.n > 0) {
     write_log(idx);     // Write modified blocks from cache to log
     write_head(idx);    // Write header to disk -- the real commit
-    install_trans(0); // Now install writes to home locations
+    install_trans(0, idx); // Now install writes to home locations
     log[idx].lh.n = 0;
     write_head(idx);    // Erase the transaction from the log
   }
