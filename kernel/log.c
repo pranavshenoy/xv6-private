@@ -43,15 +43,16 @@ struct log {
   int size;
   int outstanding; // how many FS sys calls are executing.
   int commit_ready; //ready to commit
+  int committing;
   int dev;
   uint64 id;
   struct logheader lh;
 };
-struct log log[NPARALLELLOGGING];
+struct log log[end];
 
 uint64 commit_enqueue = 0, commit_dequeue = 0;
 struct spinlock commit_idx_lk;
-int is_committing;
+//int is_committing;
 #define INDEX(x) (x%NPARALLELLOGGING)
 
 static void recover_from_log(void);
@@ -101,11 +102,11 @@ void set_dequeue(uint64 val) {
   release(&commit_idx_lk);
 }
 
-void set_is_committing(int val) {
-	acquire(&commit_idx_lk);
-	is_committing = val;
-	release(&commit_idx_lk);
-}
+//void set_is_committing(int val) {
+//	acquire(&commit_idx_lk);
+//	is_committing = val;
+//	release(&commit_idx_lk);
+//}
 
 uint64 get_commit_dequeue() {
 	uint64 val;
@@ -236,12 +237,21 @@ recover_from_log(int idx)
 bool is_log_full(int idx) {
 	
 	acquire(&log[idx].lock);
-	if(log[idx].lh.n + (log[idx].outstanding+1)*MAXOPBLOCKS > LOGSIZE/NPARALLELLOGGING) {
+	if(log[idx].lh.n + (log[idx].outstanding+1)*MAXOPBLOCKS > LOGSIZE) {
 		release(&log[idx].lock);
 		return true;
 	}
 	release(&log[idx].lock);
 	return false;
+}
+
+//has commit lock already acquired
+int commit_ready(int idx) {
+	
+	acquire(&log[idx].lock);
+	int val = log[idx].commit_ready;
+	release(&log[idx].lock);
+	return val;
 }
 
 // called at the start of each FS system call.
@@ -252,8 +262,10 @@ begin_op(void)
 	while(1) {
 		if(commit_enqueue - commit_dequeue > 4)
 			panic("more than 4 log structure at a time");
-		if(((commit_enqueue - commit_dequeue) == 4) && is_log_full(INDEX(enqueue))) {
+		if(((commit_enqueue - commit_dequeue) == 4) && is_log_full(INDEX(commit_enqueue))) {
 			sleep(&commit_idx_lk, &commit_idx_lk);
+		} else if(commit_ready(INDEX(enqueue))) {
+			commit_enqueue++;
 		} else if(is_log_full(INDEX(enqueue))) {
 			commit_enqueue++;
 			break;
@@ -273,120 +285,48 @@ void
 end_op(void)
 {
 	uint64 id = myproc()->fs_log_id;
+	myproc()->fs_log_id = 0;
 	acquire(&log[INDEX(id)].lock);
 	log[INDEX(id)].outstanding -= 1;
-	if(log[INDEX(id)].outstanding == 0) {
-		log[INDEX(id)].commit_ready = 1;
-		if(id == get_commit_dequeue()) {
-			commit(); //possible race condition
-			log[id].commit_ready = 0;
-			wakeup(&commit_idx_lk);
-			release(&log[INDEX(id)].lock);
-			return;
-		}
+	if(log[INDEX(id)].outstanding != 0) { //not last end_op
 		wakeup(&commit_idx_lk);
 		release(&log[INDEX(id)].lock);
-		
-		if(is_committing) {
-			return;
-		}
-		uint64 dq = get_commit_dequeue();
-		acquire(&log[INDEX(dq)]);
-		if(!log[INDEX(dq)].commit_ready) {
-			release(&log[INDEX(dq)]);
-			return;
-		}
-		release(&log[INDEX(dq)]);
-		wakeup(&log[INDEX(dq)]);
-		//TODO: acquire lock enq
-		sleep(&log[INDEX(commit_enqueue)], &log[INDEX(commit_enqueue)].lock);
-		commit();
-		myproc()->fs_log_id = 0;
-		//TODO: release lock enq
-		increment_dequeue();
-		uint64 dq = get_commit_dequeue();
-		acquire(&log[INDEX(dq)]);
-		if(!log[INDEX(dq)].commit_ready) {
-			release(&log[INDEX(dq)]);
-			return;
-		}
-		commit();
-		release(&log[INDEX(dq)]);
+		return;
 	}
+	log[INDEX(id)].commit_ready = 1;
+	if(id == commit_queue) {  //TODO: lock?
+		commit();
+		wakeup(&commit_idx_lk);
+		release(&log[INDEX(id)].lock);
+		increment_dequeue();
+		return;
+	}
+	wakeup(&commit_idx_lk);
+	sleep(&log[INDEX(id)], &log[INDEX(id)].lock);
+	commit();
+	wakeup(&commit_idx_lk);
+	release(&log[INDEX(id)].lock);
+	increment_dequeue();
 	
-	
-	/*
-	 1. do we need commit lock here?
-	 2. take seq no. from myproc
-	 3. acquire log[seqno%4] lock
-	 4. subtract outstanding
-	 5.	if outstanding == 0
-	 
-		1. set it to commit ready
-		2. if enq == deq
-		   1. commit it
-		   2. incrmnt deq
-				wakeup commit lock
-		   3. return
-	 3.
-			1. acquire commit lock
-			2. check if is_committing global one -- commit lock
-			3. acquire log lock[deque]   --
-			4. check if its commit ready
-			5. wakeup(log deq)
-			6. sleep log enq
-			   is_committing = true
-			   
-			7. commit it
-	 wakeup commit lock
-			8. deq++
-			   is_committing = false
-				myproc - seq id = 0
-			9. check if ready
-			10. wakeup(log deq)
-	 wakeup commit lock
-	 
-			end
-	
-	 
-	 */
-  int do_commit = 0;
-
-  acquire(&log.lock);
-  log.outstanding -= 1;
-  if(log.committing)
-    panic("log.committing");
-  if(log.outstanding == 0){
-    do_commit = 1;
-    log.committing = 1;
-  } else {
-    // begin_op() may be waiting for log space,
-    // and decrementing log.outstanding has decreased
-    // the amount of reserved space.
-    wakeup(&log);
-  }
-  release(&log.lock);
-
-  if(do_commit){
-    // call commit w/o holding locks, since not allowed
-    // to sleep with locks.
-    commit();
-    acquire(&log.lock);
-    log.committing = 0;
-    wakeup(&log);
-    release(&log.lock);
-  }
+	uint64 dq = get_commit_dequeue();
+	acquire(&log[INDEX(dq)].lock);
+	if(!log[INDEX(dq)].commit_ready) {
+		release(&log[INDEX(dq)].lock);
+		return;
+	}
+	wakeup(&log[INDEX(dq)]);
+	release(&log[INDEX(dq)].lock);
 }
 
 // Copy modified blocks from cache to log.
 static void
-write_log(void)
+write_log(int idx)
 {
   int tail;
 
-  for (tail = 0; tail < log.lh.n; tail++) {
-    struct buf *to = bread(log.dev, log.start+tail+1); // log block
-    struct buf *from = bread(log.dev, log.lh.block[tail]); // cache block
+  for (tail = 0; tail < log[idx].lh.n; tail++) {
+    struct buf *to = bread(log[idx].dev, log[idx].start+tail+1); // log block
+    struct buf *from = bread(log[idx].dev, log[idx].lh.block[tail]); // cache block
     memmove(to->data, from->data, BSIZE);
     bwrite(to);  // write the log
     brelse(from);
@@ -395,17 +335,22 @@ write_log(void)
 }
 
 static void
-commit()
+commit(int idx)
 {
-  set_is_committing(1);
-  if (log.lh.n > 0) {
-    write_log();     // Write modified blocks from cache to log
-    write_head();    // Write header to disk -- the real commit
-    install_trans(0); // Now install writes to home locations
-    log.lh.n = 0;
-    write_head();    // Erase the transaction from the log
+  if(log[INDEX(id)].is_committing) {
+	return;  // no need to return status since some other process is handling it
   }
-  set_is_committing(0);
+  log[INDEX(id)].is_committing = 1;
+  if (log[idx].lh.n > 0) {
+    write_log(idx);     // Write modified blocks from cache to log
+    write_head(idx);    // Write header to disk -- the real commit
+    install_trans(0); // Now install writes to home locations
+    log[idx].lh.n = 0;
+    write_head(idx);    // Erase the transaction from the log
+  }
+  log[INDEX(id)].is_committing = 0;
+  log[INDEX(id)].commit_ready = 0;
+  return;
 }
 
 // Caller has modified b->data and is done with the buffer.
@@ -421,22 +366,22 @@ void
 log_write(struct buf *b)
 {
   int i;
-
-  acquire(&log.lock);
-  if (log.lh.n >= LOGSIZE || log.lh.n >= log.size - 1)
+  uint64 id = myproc()->fs_log_id;
+  acquire(&log[INDEX(id)].lock);
+  if (log[INDEX(id)].lh.n >= LOGSIZE || log[INDEX(id)].lh.n >= log[INDEX(id)].size - 1)
     panic("too big a transaction");
-  if (log.outstanding < 1)
+  if (log[INDEX(id)].outstanding < 1)
     panic("log_write outside of trans");
 
   for (i = 0; i < log.lh.n; i++) {
-    if (log.lh.block[i] == b->blockno)   // log absorbtion
+    if (log[INDEX(id)].lh.block[i] == b->blockno)   // log absorbtion
       break;
   }
-  log.lh.block[i] = b->blockno;
-  if (i == log.lh.n) {  // Add new block to log?
+  log[INDEX(id)].lh.block[i] = b->blockno;
+  if (i == log[INDEX(id)].lh.n) {  // Add new block to log?
     bpin(b);
-    log.lh.n++;
+    log[INDEX(id)].lh.n++;
   }
-  release(&log.lock);
+  release(&log[INDEX(id)].lock);
 }
 
