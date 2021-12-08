@@ -276,6 +276,8 @@ begin_op(void)
 			break;
 		}
 	}
+	int val = myproc()->killed;
+	val++;
 	myproc()->fs_log_id = commit_enqueue;
 	release(&commit_idx_lk);
 	
