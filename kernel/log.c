@@ -53,9 +53,11 @@ struct log log[NPARALLELLOGGING];
 uint64 commit_enqueue = 0, commit_dequeue = 0;
 struct spinlock commit_idx_lk;
 //int is_committing;
-#define INDEX(x) (x%NPARALLELLOGGING)
+#define INDEX(x) ((x) % NPARALLELLOGGING)
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+#define MAX(a, b) (((a) > (b)) ? (a) : (b))
 
-static void recover_from_log(void);
+static void recover_from_log(int idx);
 static void commit();
 static void init_log_struct(int dev, struct superblock *sb);
 static void start_recovery();
@@ -70,7 +72,7 @@ initlog(int dev, struct superblock *sb)
   if (sizeof(struct logheader) >= BSIZE)
     panic("initlog: too big logheader");
 
-  initlock(&log.lock, "log");
+  initlock(&log->lock, "log");
   initlock(&commit_idx_lk, "commit index lock");
   init_log_struct(dev, sb);
   start_recovery();
@@ -131,8 +133,8 @@ void get_min_max(int* arr) {
       minimum = log[i].id;
     }
 
-    minimum = min(minimum, log[i].id);
-    maximum = max(maximum, log[i].id);
+    minimum = MIN(minimum, log[i].id);
+    maximum = MAX(maximum, log[i].id);
   }
   arr[0] = minimum;
   arr[1] = maximum;
@@ -172,9 +174,9 @@ static void init_log_struct(int  dev, struct superblock *sb) {
 
   for(int i=0; i<NPARALLELLOGGING;i++) {
 
-    log.start = sb->logstart + i*(sb->nlog);
-    log.size = (sb->nlog)/NPARALLELLOGGING;
-    log.dev = dev;
+    log[i].start = sb->logstart + i*(sb->nlog);
+    log[i].size = (sb->nlog);
+    log[i].dev = dev;
   }  
 }
 
@@ -339,10 +341,10 @@ write_log(int idx)
 static void
 commit(int idx)
 {
-  if(log[INDEX(idx)].is_committing) {
+  if(log[INDEX(idx)].committing) {
 	return;  // no need to return status since some other process is handling it
   }
-  log[INDEX(idx)].is_committing = 1;
+  log[INDEX(idx)].committing = 1;
   if (log[idx].lh.n > 0) {
     write_log(idx);     // Write modified blocks from cache to log
     write_head(idx);    // Write header to disk -- the real commit
@@ -350,7 +352,7 @@ commit(int idx)
     log[idx].lh.n = 0;
     write_head(idx);    // Erase the transaction from the log
   }
-  log[INDEX(id)].is_committing = 0;
+  log[INDEX(id)].committing = 0;
   log[INDEX(id)].commit_ready = 0;
   return;
 }
@@ -375,7 +377,7 @@ log_write(struct buf *b)
   if (log[INDEX(id)].outstanding < 1)
     panic("log_write outside of trans");
 
-  for (i = 0; i < log.lh.n; i++) {
+  for (i = 0; i < log[INDEX(id)].lh.n; i++) {
     if (log[INDEX(id)].lh.block[i] == b->blockno)   // log absorbtion
       break;
   }
