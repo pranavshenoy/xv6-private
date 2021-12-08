@@ -283,7 +283,7 @@ begin_op(void)
 	release(&commit_idx_lk);
 	
 	acquire(&log[myproc()->fs_log_id].lock);
-	log[INDEX(myproc()->fs_log_id)] += 1;
+	log[INDEX(myproc()->fs_log_id)].outstanding += 1;
 	release(&log[myproc()->fs_log_id].lock);
 }
 
