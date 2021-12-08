@@ -159,7 +159,8 @@ static void recover_from_logs() {
 
   //dequeue <= enqueue
   while(commit_dequeue <= commit_enqueue) {
-    recover_from_log();
+    recover_from_log(commit_dequeue);
+	  commit_dequeue++;
   }
 }
 
@@ -352,8 +353,8 @@ commit(int idx)
     log[idx].lh.n = 0;
     write_head(idx);    // Erase the transaction from the log
   }
-  log[INDEX(id)].committing = 0;
-  log[INDEX(id)].commit_ready = 0;
+  log[INDEX(idx)].committing = 0;
+  log[INDEX(idx)].commit_ready = 0;
   return;
 }
 
