@@ -149,10 +149,10 @@ void get_min_max(uint64* arr) {
 }
 
 static void recover_from_logs() {
-	
-  while(commit_dequeue <= commit_enqueue) {
+  int i = commit_dequeue;
+  while(i <= commit_enqueue) {
     recover_from_log(commit_dequeue);
-	commit_dequeue++;
+	i++;
   }
 }
 
@@ -269,8 +269,9 @@ begin_op(void)
 	acquire(&commit_idx_lk);
 	while(1) {
 		printf("begin_op: commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
-		if(commit_enqueue - commit_dequeue > 4)
+		if( (commit_enqueue - commit_dequeue) > 4) {
 			panic("more than 4 log structure at a time");
+		}
 		if(((commit_enqueue - commit_dequeue) == 4) && is_log_full(INDEX(commit_enqueue))) {
 			printf("begin_op all log struct full: commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
 			sleep(&commit_idx_lk, &commit_idx_lk);
