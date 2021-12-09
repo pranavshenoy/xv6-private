@@ -317,6 +317,7 @@ end_op(void)
 	if(id == commit_dequeue) {  //TODO: lock?
 		printf("end_op: id == commit_dequeue, committing fs_id: %d, outstanding: %d\n", id, log[INDEX(id)].outstanding);
 		commit();
+		printf("after committing\n");
 		wakeup(&commit_idx_lk);
 		release(&log[INDEX(id)].lock);
 		increment_dequeue();
