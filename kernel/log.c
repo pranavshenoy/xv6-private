@@ -67,7 +67,7 @@ static void recover_from_logs();
 static void read_head(int log_idx);
 static void recover_from_log(int idx);
 static void write_head(int idx);
-void get_min_max(int* arr);
+void get_min_max(uint64* arr);
 void set_enqueue(uint64 val);
 void set_dequeue(uint64 val);
 static void install_trans(int recovering, int idx);
