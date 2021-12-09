@@ -269,7 +269,7 @@ begin_op(void)
 	acquire(&commit_idx_lk);
 	while(1) {
 		printf("begin_op: commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
-		int diff = (commit_enqueue - commit_dequeue);
+		int diff = MAX(0, (commit_enqueue - commit_dequeue));
 		if(diff > 4) {
 			panic("more than 4 log structure at a time");
 		} else if(((commit_enqueue - commit_dequeue) == 4) && is_log_full(INDEX(commit_enqueue))) {
@@ -313,10 +313,10 @@ end_op(void)
 		release(&log[INDEX(id)].lock);
 		return;
 	}
-	printf("end_op: outstanding == 0, fs_id: %d, outstanding: %d\n", id, log[INDEX(id)].outstanding);
+//	printf("end_op: outstanding == 0, fs_id: %d, outstanding: %d\n", id, log[INDEX(id)].outstanding);
 	log[INDEX(id)].commit_ready = 1;
 	if(id == get_commit_dequeue()) {  //TODO: lock?
-		printf("end_op: id == commit_dequeue, committing fs_id: %d, outstanding: %d\n", id, log[INDEX(id)].outstanding);
+		printf("end_op: id == commit_dequeue, fs_id: %d, outstanding: %d\n", id, log[INDEX(id)].outstanding);
 		if(log[INDEX(id)].committing) {
 			release(&log[INDEX(id)].lock);
 			return;  // no need to return status since some other process is handling it
@@ -328,11 +328,9 @@ end_op(void)
 		acquire(&log[INDEX(id)].lock);
 		log[INDEX(id)].committing = 0;
 		log[INDEX(id)].commit_ready = 0;
-		printf("after committing\n");
 		wakeup(&commit_idx_lk);
-//		release(&log[INDEX(id)].lock);
 		increment_dequeue();
-		increment_enqueue();
+//		increment_enqueue();
 		release(&log[INDEX(id)].lock);
 		return;
 	}
@@ -351,10 +349,10 @@ end_op(void)
 	acquire(&log[INDEX(id)].lock);
 	log[INDEX(id)].committing = 0;
 	log[INDEX(id)].commit_ready = 0;
-	printf("after committing\n");
+//	printf("after committing\n");
 	wakeup(&commit_idx_lk);
 	increment_dequeue();
-	increment_enqueue();
+//	increment_enqueue();
 	release(&log[INDEX(id)].lock);
 	
 	printf("end_op: waking up other processes, committing fs_id: %d, dequeue: %d\n", id, commit_dequeue);
