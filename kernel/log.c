@@ -335,7 +335,7 @@ end_op(void)
 		log[INDEX(id)].committing = 0;
 		log[INDEX(id)].commit_ready = 0;
 		wakeup(&commit_idx_lk);
-//		increment_dequeue();
+		increment_dequeue();
 //		increment_enqueue();
 		release(&log[INDEX(id)].lock);
 		return;
