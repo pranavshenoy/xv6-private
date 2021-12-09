@@ -265,27 +265,32 @@ int commit_ready(int idx) {
 void
 begin_op(void)
 {
+	printf("begin_op: start\n");
 	acquire(&commit_idx_lk);
 	while(1) {
+		printf("begin_op: commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
 		if(commit_enqueue - commit_dequeue > 4)
 			panic("more than 4 log structure at a time");
 		if(((commit_enqueue - commit_dequeue) == 4) && is_log_full(INDEX(commit_enqueue))) {
+			printf("begin_op all log struct full: commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
 			sleep(&commit_idx_lk, &commit_idx_lk);
 		} else if(commit_ready(INDEX(commit_enqueue))) {
+			printf("begin_op- current log struct commit_ready: commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
 			commit_enqueue++;
 		} else if(is_log_full(INDEX(commit_enqueue))) {
+			printf("begin_op- current log struct full: commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
 			commit_enqueue++;
 			break;
 		}
 	}
-	int val = myproc()->killed;
-	val++;
+	printf("begin_op- log struct free: commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
 	myproc()->fs_log_id = commit_enqueue;
 	release(&commit_idx_lk);
 	
 	acquire(&log[myproc()->fs_log_id].lock);
 	log[INDEX(myproc()->fs_log_id)].outstanding += 1;
 	release(&log[myproc()->fs_log_id].lock);
+	
 }
 
 // called at the end of each FS system call.
