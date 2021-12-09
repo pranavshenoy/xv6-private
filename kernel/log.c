@@ -316,10 +316,11 @@ end_op(void)
 	log[INDEX(id)].commit_ready = 1;
 	if(id == commit_dequeue) {  //TODO: lock?
 		printf("end_op: id == commit_dequeue, committing fs_id: %d, outstanding: %d\n", id, log[INDEX(id)].outstanding);
+		release(&log[INDEX(id)].lock);
 		commit();
 		printf("after committing\n");
 		wakeup(&commit_idx_lk);
-		release(&log[INDEX(id)].lock);
+//		release(&log[INDEX(id)].lock);
 		increment_dequeue();
 		return;
 	}
@@ -327,9 +328,10 @@ end_op(void)
 	wakeup(&commit_idx_lk);
 	sleep(&log[INDEX(id)], &log[INDEX(id)].lock);
 	printf("end_op: committing after sleep, committing fs_id: %d, dequeue: %d\n", id, commit_dequeue);
+	release(&log[INDEX(id)].lock);
 	commit();
 	wakeup(&commit_idx_lk);
-	release(&log[INDEX(id)].lock);
+//	release(&log[INDEX(id)].lock);
 	increment_dequeue();
 	
 	printf("end_op: waking up other processes, committing fs_id: %d, dequeue: %d\n", id, commit_dequeue);
@@ -375,6 +377,7 @@ commit(int idx)
     log[idx].lh.n = 0;
     write_head(idx);    // Erase the transaction from the log
   }
+  
   log[INDEX(idx)].committing = 0;
   log[INDEX(idx)].commit_ready = 0;
   return;
