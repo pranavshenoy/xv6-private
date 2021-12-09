@@ -271,8 +271,7 @@ begin_op(void)
 		printf("begin_op: commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
 		if( (commit_enqueue - commit_dequeue) > 4) {
 			panic("more than 4 log structure at a time");
-		}
-		if(((commit_enqueue - commit_dequeue) == 4) && is_log_full(INDEX(commit_enqueue))) {
+		} else if(((commit_enqueue - commit_dequeue) == 4) && is_log_full(INDEX(commit_enqueue))) {
 			printf("begin_op all log struct full: commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
 			sleep(&commit_idx_lk, &commit_idx_lk);
 		} else if(commit_ready(INDEX(commit_enqueue))) {
@@ -281,6 +280,8 @@ begin_op(void)
 		} else if(is_log_full(INDEX(commit_enqueue))) {
 			printf("begin_op- current log struct full: commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
 			commit_enqueue++;
+			break;
+		} else {
 			break;
 		}
 	}
