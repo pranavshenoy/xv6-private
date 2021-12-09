@@ -130,7 +130,7 @@ static void read_head(int log_idx)
   brelse(buf);
 }
 
-void get_min_max(int* arr) {
+void get_min_max(uint64* arr) {
 
   int minimum = 0, maximum = 0;
   for(int i=0; i<NPARALLELLOGGING;i++) {
