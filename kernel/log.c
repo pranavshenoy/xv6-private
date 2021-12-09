@@ -352,7 +352,7 @@ end_op(void)
 //	printf("after committing\n");
 	wakeup(&commit_idx_lk);
 	increment_dequeue();
-//	increment_enqueue();
+	increment_enqueue();
 	release(&log[INDEX(id)].lock);
 	
 	printf("end_op: waking up other processes, committing fs_id: %d, dequeue: %d\n", id, commit_dequeue);
