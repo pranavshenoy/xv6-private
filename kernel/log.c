@@ -66,6 +66,7 @@ static void read_all_head();
 static void recover_from_logs();
 static void read_head(int log_idx);
 static void recover_from_log(int idx);
+static void write_head(int idx);
 
 void
 initlog(int dev, struct superblock *sb)
@@ -77,6 +78,119 @@ initlog(int dev, struct superblock *sb)
   initlock(&commit_idx_lk, "commit index lock");
   init_log_struct(dev, sb);
   start_recovery();
+  printf("TEST: Completed Initlog\n");
+}
+
+static void init_log_struct(int  dev, struct superblock *sb) {
+
+  for(int i=0; i<NPARALLELLOGGING;i++) {
+	log[i].start = sb->logstart + i*(LOGSIZE);
+	log[i].size = (LOGSIZE);
+	log[i].dev = dev;
+  }
+}
+
+void start_recovery() {
+
+  read_all_head();
+  uint64 arr[2];
+  get_min_max(arr);
+  if(arr[0] == 0) {
+	set_enqueue(1);
+	set_dequeue(1);
+  } else {
+	set_enqueue(arr[1]);
+	set_dequeue(arr[0]);
+  }
+  printf("Start_recovery- max: %d min: %d\n", commit_enqueue, commit_dequeue);
+  recover_from_logs();
+}
+
+static void read_all_head() {
+
+  for(int i=0; i<NPARALLELLOGGING;i++) {
+	read_head(i);
+  }
+}
+
+// Read the log header from disk into the in-memory log header
+static void read_head(int log_idx)
+{
+  struct buf *buf = bread(log[log_idx].dev, log[log_idx].start);
+  struct logheader *lh = (struct logheader *) (buf->data);
+  int i;
+  log[log_idx].lh.n = lh->n;
+  for (i = 0; i < log[log_idx].lh.n; i++) {
+	log[log_idx].lh.block[i] = lh->block[i];
+  }
+  brelse(buf);
+}
+
+void get_min_max(int* arr) {
+
+  int minimum = 0, maximum = 0;
+  for(int i=0; i<NPARALLELLOGGING;i++) {
+    if(log[i].id == 0) {
+      continue;
+    }
+    if(minimum == 0) {
+      minimum = log[i].id;
+    }
+
+    minimum = MIN(minimum, log[i].id);
+    maximum = MAX(maximum, log[i].id);
+  }
+  arr[0] = minimum;
+  arr[1] = maximum;
+}
+
+static void recover_from_logs() {
+	
+  while(commit_dequeue <= commit_enqueue) {
+    recover_from_log(commit_dequeue);
+	commit_dequeue++;
+  }
+}
+
+static void recover_from_log(int idx)
+{
+  install_trans(1, idx); // if committed, copy from log to disk
+  log[idx].lh.n = 0;
+  write_head(idx); // clear the log
+}
+
+// Write in-memory log header to disk.
+// This is the true point at which the
+// current transaction commits.
+static void write_head(int idx)
+{
+  struct buf *buf = bread(log[idx].dev, log[idx].start);
+  struct logheader *hb = (struct logheader *) (buf->data);
+  int i;
+  hb->n = log[idx].lh.n;
+  for (i = 0; i < log[idx].lh.n; i++) {
+	hb->block[i] = log[idx].lh.block[i];
+  }
+  bwrite(buf);
+  brelse(buf);
+}
+
+// Copy committed blocks from log to their home location
+static void
+install_trans(int recovering, int idx)
+{
+  int tail;
+
+  for (tail = 0; tail < log[idx].lh.n; tail++) {
+    struct buf *lbuf = bread(log[idx].dev, log[idx].start+tail+1); // read log block
+    struct buf *dbuf = bread(log[idx].dev, log[idx].lh.block[tail]); // read dst
+    memmove(dbuf->data, lbuf->data, BSIZE);  // copy block to dst
+    bwrite(dbuf);  // write dst to disk
+    if(recovering == 0)
+      bunpin(dbuf);
+    brelse(lbuf);
+    brelse(dbuf);
+  }
 }
 
 //Utility function for enqueue and dequeue
@@ -123,122 +237,6 @@ uint64 get_commit_dequeue() {
 
 //--
 
-void get_min_max(int* arr) {
-
-  int minimum = 0, maximum = 0;
-  for(int i=0; i<NPARALLELLOGGING;i++) {
-    if(log[i].id == 0) {
-      continue;
-    }
-    if(minimum == 0) {
-      minimum = log[i].id;
-    }
-
-    minimum = MIN(minimum, log[i].id);
-    maximum = MAX(maximum, log[i].id);
-  }
-  arr[0] = minimum;
-  arr[1] = maximum;
-}
-
-void start_recovery() {
-
-  read_all_head();
-  int arr[2];
-  get_min_max(arr);
-  if(arr[0] == 0) {
-    set_enqueue(1);
-    set_dequeue(1);
-  } else {
-    set_enqueue(arr[1]);
-    set_dequeue(arr[0]);
-  }
-  recover_from_logs();
-}
-
-static void recover_from_logs() {
-
-  //dequeue <= enqueue
-  while(commit_dequeue <= commit_enqueue) {
-    recover_from_log(commit_dequeue);
-	  commit_dequeue++;
-  }
-}
-
-static void read_all_head() {
-
-  for(int i=0; i<NPARALLELLOGGING;i++) {
-    read_head(i);
-  }
-}
-
-static void init_log_struct(int  dev, struct superblock *sb) {
-
-  for(int i=0; i<NPARALLELLOGGING;i++) {
-
-    log[i].start = sb->logstart + i*(sb->nlog);
-    log[i].size = (sb->nlog);
-    log[i].dev = dev;
-  }  
-}
-
-
-// Copy committed blocks from log to their home location
-static void
-install_trans(int recovering, int idx)
-{
-  int tail;
-
-  for (tail = 0; tail < log[idx].lh.n; tail++) {
-    struct buf *lbuf = bread(log[idx].dev, log[idx].start+tail+1); // read log block
-    struct buf *dbuf = bread(log[idx].dev, log[idx].lh.block[tail]); // read dst
-    memmove(dbuf->data, lbuf->data, BSIZE);  // copy block to dst
-    bwrite(dbuf);  // write dst to disk
-    if(recovering == 0)
-      bunpin(dbuf);
-    brelse(lbuf);
-    brelse(dbuf);
-  }
-}
-
-// Read the log header from disk into the in-memory log header
-static void
-read_head(int log_idx)
-{
-  struct buf *buf = bread(log[log_idx].dev, log[log_idx].start);
-  struct logheader *lh = (struct logheader *) (buf->data);
-  int i;
-  log[log_idx].lh.n = lh->n;
-  for (i = 0; i < log[log_idx].lh.n; i++) {
-    log[log_idx].lh.block[i] = lh->block[i];
-  }
-  brelse(buf);
-}
-
-// Write in-memory log header to disk.
-// This is the true point at which the
-// current transaction commits.
-static void
-write_head(int idx)
-{
-  struct buf *buf = bread(log[idx].dev, log[idx].start);
-  struct logheader *hb = (struct logheader *) (buf->data);
-  int i;
-  hb->n = log[idx].lh.n;
-  for (i = 0; i < log[idx].lh.n; i++) {
-    hb->block[i] = log[idx].lh.block[i];
-  }
-  bwrite(buf);
-  brelse(buf);
-}
-
-static void
-recover_from_log(int idx)
-{
-  install_trans(idx, 1); // if committed, copy from log to disk
-  log[idx].lh.n = 0;
-  write_head(idx); // clear the log
-}
 
 int is_log_full(int idx) {
 	
