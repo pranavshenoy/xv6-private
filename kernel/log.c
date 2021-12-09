@@ -206,6 +206,10 @@ void increment_enqueue() {
 
 void increment_dequeue() {
   acquire(&commit_idx_lk);
+	if(commit_dequeue == commit_enqueue) {
+		release(&commit_idx_lk);
+		return;
+	}
   commit_dequeue++;
   release(&commit_idx_lk);
 }
@@ -275,6 +279,7 @@ begin_op(void)
 		} else if(((commit_enqueue - commit_dequeue) == 4) && is_log_full(INDEX(commit_enqueue))) {
 			printf("begin_op all log struct full: commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
 			sleep(&commit_idx_lk, &commit_idx_lk);
+			printf("waking up:  commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
 		} else if(commit_ready(INDEX(commit_enqueue))) {
 			printf("begin_op- current log struct commit_ready: commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
 			commit_enqueue++;
@@ -318,6 +323,7 @@ end_op(void)
 	if(id == get_commit_dequeue()) {  //TODO: lock?
 		printf("end_op: id == commit_dequeue, fs_id: %d, outstanding: %d\n", id, log[INDEX(id)].outstanding);
 		if(log[INDEX(id)].committing) {
+			wakeup(&commit_idx_lk);
 			release(&log[INDEX(id)].lock);
 			return;  // no need to return status since some other process is handling it
 		}
@@ -339,6 +345,7 @@ end_op(void)
 	sleep(&log[INDEX(id)], &log[INDEX(id)].lock);
 	printf("end_op: committing after sleep, committing fs_id: %d, dequeue: %d\n", id, commit_dequeue);
 	if(log[INDEX(id)].committing) {
+		wakeup(&commit_idx_lk);
 		release(&log[INDEX(id)].lock);
 		return;  // no need to return status since some other process is handling it
 	}
