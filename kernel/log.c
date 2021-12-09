@@ -59,7 +59,7 @@ struct spinlock commit_idx_lk;
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 
 static void recover_from_log(int idx);
-static void commit();
+static void commit(int idx);
 static void init_log_struct(int dev, struct superblock *sb);
 static void start_recovery();
 static void read_all_head();
@@ -317,7 +317,7 @@ end_op(void)
 	if(id == commit_dequeue) {  //TODO: lock?
 		printf("end_op: id == commit_dequeue, committing fs_id: %d, outstanding: %d\n", id, log[INDEX(id)].outstanding);
 		release(&log[INDEX(id)].lock);
-		commit();
+		commit(INDEX(id));
 		printf("after committing\n");
 		wakeup(&commit_idx_lk);
 //		release(&log[INDEX(id)].lock);
@@ -329,7 +329,7 @@ end_op(void)
 	sleep(&log[INDEX(id)], &log[INDEX(id)].lock);
 	printf("end_op: committing after sleep, committing fs_id: %d, dequeue: %d\n", id, commit_dequeue);
 	release(&log[INDEX(id)].lock);
-	commit();
+	commit(INDEX(id));
 	wakeup(&commit_idx_lk);
 //	release(&log[INDEX(id)].lock);
 	increment_dequeue();
@@ -363,8 +363,7 @@ write_log(int idx)
   }
 }
 
-static void
-commit(int idx)
+static void commit(int idx)
 {
   if(log[INDEX(idx)].committing) {
 	return;  // no need to return status since some other process is handling it
