@@ -371,6 +371,7 @@ end_op(void)
 	}
 	if(log[INDEX(id)].lh.n == 0) {
 		printf("Nothing to write\n");
+		release(&log[INDEX(id)].lock);
 		return;
 	}
 	log[INDEX(id)].outstanding -= 1;
