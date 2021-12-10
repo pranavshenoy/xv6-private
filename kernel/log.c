@@ -207,10 +207,11 @@ void increment_enqueue() {
 void increment_dequeue() {
   acquire(&commit_idx_lk);
 	if(commit_dequeue == commit_enqueue) {
-		printf("Not incrementing ")
+		printf("Not incrementing dequeue\n");
 		release(&commit_idx_lk);
 		return;
 	}
+  printf("incrementing dequeue\n");
   commit_dequeue++;
   release(&commit_idx_lk);
 }
