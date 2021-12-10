@@ -207,6 +207,7 @@ void increment_enqueue() {
 void increment_dequeue() {
   acquire(&commit_idx_lk);
 	if(commit_dequeue == commit_enqueue) {
+		printf("Not incrementing ")
 		release(&commit_idx_lk);
 		return;
 	}
@@ -280,7 +281,6 @@ begin_op(void)
 	printf("begin_op: start\n");
 	acquire(&commit_idx_lk);
 	while(1) {
-		printf("begin_op: commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
 		int diff = MAX(0, (commit_enqueue - commit_dequeue));
 		if(diff > 4) {
 			panic("more than 4 log structure at a time");
@@ -349,7 +349,6 @@ end_op(void)
 {
 	uint64 id = myproc()->fs_log_id;
 	myproc()->fs_log_id = 0;
-	printf("end_op: start - fs_id: %d\n", id);
 	acquire(&log[INDEX(id)].lock);
 	if(log[INDEX(id)].committing) {
 		panic("The current log struct is already committing\n");
@@ -360,9 +359,9 @@ end_op(void)
 		release(&log[INDEX(id)].lock);
 		return;
 	}
+	printf("end_op: needs to be committed, fs_id: %d, commit_enqueue: %d, commit_dequeue: %d\n", id, get_commit_enqueue(), get_commit_dequeue());
 	log[INDEX(id)].commit_ready = 1;
 	if(id == get_commit_dequeue()) {  //TODO: lock?
-	
 		execute_commit(INDEX(id));
 		wakeup_next();
 		return;
