@@ -369,14 +369,15 @@ end_op(void)
 	if(log[INDEX(id)].committing) {
 		panic("The current log struct is already committing\n");
 	}
-	if(log[INDEX(id)].lh.n == 0) {
-		printf("Nothing to write\n");
-		release(&log[INDEX(id)].lock);
-		return;
-	}
+
 	log[INDEX(id)].outstanding -= 1;
 	if(log[INDEX(id)].outstanding != 0) { //not last end_op
 		wakeup(&commit_idx_lk);
+		release(&log[INDEX(id)].lock);
+		return;
+	}
+	if(log[INDEX(id)].lh.n == 0) {
+		printf("Nothing to write\n");
 		release(&log[INDEX(id)].lock);
 		return;
 	}
