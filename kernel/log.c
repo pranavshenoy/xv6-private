@@ -264,7 +264,6 @@ int commit_ready(int idx) {
 void
 begin_op(void)
 {
-	printf("begin_op: start\n");
 	acquire(&commit_idx_lk);
 	while(1) {
 		int diff = MAX(0, (commit_enqueue - commit_dequeue));
