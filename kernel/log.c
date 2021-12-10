@@ -187,8 +187,11 @@ static void install_trans(int recovering, int idx)
   for (tail = 0; tail < log[idx].lh.n; tail++) {
     struct buf *lbuf = bread(log[idx].dev, log[idx].start+tail+1); // read log block
     struct buf *dbuf = bread(log[idx].dev, log[idx].lh.block[tail]); // read dst
-    memmove(dbuf->data, lbuf->data, BSIZE);  // copy block to dst
+	uchar data[BSIZE];
+	memmove(&data, dbuf->data, BSIZE);
+	memmove(dbuf->data, lbuf->data, BSIZE);  // copy block to dst
     bwrite(dbuf);  // write dst to disk
+	memmove(dbuf->data, &data, BSIZE);
     if(recovering == 0)
       bunpin(dbuf);
     brelse(lbuf);
