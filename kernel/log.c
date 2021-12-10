@@ -309,10 +309,10 @@ begin_op(void)
 	int idx = INDEX(myproc()->fs_log_id);
 	acquire(&log[idx].lock);
 	if(log[idx].committing) {
-		panic("The current process is committing\n");
+		panic("The current log struct %d is committing\n", idx);
 	}
 	if(log[idx].commit_ready) {
-		panic("The current process is commit_ready\n");
+		panic("The current log struct %d is commit_ready\n", idx);
 	}
 	log[idx].outstanding += 1;
 	release(&log[idx].lock);
