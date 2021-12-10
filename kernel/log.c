@@ -283,10 +283,11 @@ begin_op(void)
 	acquire(&commit_idx_lk);
 	while(1) {
 		int diff = MAX(0, (commit_enqueue - commit_dequeue));
-//		if(diff > 3) {
-//			panic("more than 4 log structure at a time");
-//		} else
-		if((diff >= 3 ) && is_log_full(INDEX(commit_enqueue))) {
+		if(diff > 3) {
+			printf("begin_op: more than 4 log struct\n");
+			sleep(&commit_idx_lk, &commit_idx_lk);
+		} else
+		if((diff == 3 ) && is_log_full(INDEX(commit_enqueue))) {
 			printf("begin_op all log struct full: commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
 			sleep(&commit_idx_lk, &commit_idx_lk);
 			printf("waking up:  commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
