@@ -202,21 +202,21 @@ static void install_trans(int recovering, int idx)
 //Utility function for enqueue and dequeue
 
 void increment_enqueue() {
-  acquire(&commit_idx_lk);
+//  acquire(&commit_idx_lk);
   commit_enqueue++;
-  release(&commit_idx_lk);
+//  release(&commit_idx_lk);
 }
 
 void increment_dequeue() {
-  acquire(&commit_idx_lk);
+//  acquire(&commit_idx_lk);
 	if(commit_dequeue == commit_enqueue) {
 		printf("Not incrementing dequeue\n");
-		release(&commit_idx_lk);
+//		release(&commit_idx_lk);
 		return;
 	}
   printf("incrementing dequeue\n");
   commit_dequeue++;
-  release(&commit_idx_lk);
+//  release(&commit_idx_lk);
 }
 
 void set_enqueue(uint64 val) {
