@@ -351,9 +351,10 @@ void execute_commit(int idx) {
 	printf("TEST: commit_ready for idx: %d is %d\n", idx, log[idx].commit_ready);
 	log[idx].commit_ready = 0;
 	printf("commit_ready: %d for idx: %d\n", log[idx].commit_ready, idx);
+	increment_dequeue();
 	release(&log[idx].lock);
 	wakeup(&commit_idx_lk);
-	increment_dequeue();
+	
 }
 
 // called at the end of each FS system call.
@@ -376,11 +377,11 @@ end_op(void)
 		release(&log[INDEX(id)].lock);
 		return;
 	}
-	if(log[INDEX(id)].lh.n == 0) {
-		printf("Nothing to write\n");
-		release(&log[INDEX(id)].lock);
-		return;
-	}
+//	if(log[INDEX(id)].lh.n == 0) {
+//		printf("Nothing to write\n");
+//		release(&log[INDEX(id)].lock);
+//		return;
+//	}
 //	printf("end_op: needs to be committed, fs_id: %d, commit_enqueue: %d, commit_dequeue: %d\n", id, get_commit_enqueue(), get_commit_dequeue());
 	printf("TEST: commit_id for idx: %d is %d\n", INDEX(id), log[INDEX(id)].commit_ready);
 	log[INDEX(id)].commit_ready = 1;
