@@ -363,6 +363,8 @@ end_op(void)
 {
 	uint64 id = myproc()->fs_log_id;
 	myproc()->fs_log_id = 0;
+	int cmt_dq = get_commit_dequeue();
+	int cmt_eq = get_commit_enqueue();
 	acquire(&log[INDEX(id)].lock);
 	if(log[INDEX(id)].committing) {
 		panic("The current log struct is already committing\n");
@@ -376,12 +378,12 @@ end_op(void)
 //	printf("end_op: needs to be committed, fs_id: %d, commit_enqueue: %d, commit_dequeue: %d\n", id, get_commit_enqueue(), get_commit_dequeue());
 	printf("TEST: commit_id for idx: %d is %d\n", INDEX(id), log[INDEX(id)].commit_ready);
 	log[INDEX(id)].commit_ready = 1;
-	if(id == get_commit_dequeue()) {  //TODO: lock?
+	if(id == cmt_dq) {  //TODO: lock?
 		execute_commit(INDEX(id));
 		wakeup_next();
 		return;
 	}
-	printf("end_op: going to sleep, fs_id: %d, commit_enqueue: %d, commit_dequeue: %d\n", id, get_commit_enqueue(), get_commit_dequeue());
+	printf("end_op: going to sleep, fs_id: %d, commit_enqueue: %d, commit_dequeue: %d\n", id, cmt_eq, cmt_dq);
 	wakeup(&commit_idx_lk);
 	sleep(&log[INDEX(id)], &log[INDEX(id)].lock);
 	printf("id: %d woke up\n", id);
