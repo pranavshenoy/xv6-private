@@ -348,8 +348,8 @@ void execute_commit(int idx) {
 	log[idx].committing = 0;
 	log[idx].commit_ready = 0;
 	printf("commit_ready: %d for idx: %d\n", log[idx].commit_ready, idx);
-	wakeup(&commit_idx_lk);
 	release(&log[idx].lock);
+	wakeup(&commit_idx_lk);
 	increment_dequeue();
 }
 
