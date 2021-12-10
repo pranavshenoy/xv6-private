@@ -315,7 +315,8 @@ begin_op(void)
 		printf("The current log struct %d is committing\n", idx);
 		panic("The current log struct is committing\n");
 	}
-	if(log[idx].commit_ready) {
+	printf("TEST: commit_ready for idx: %d is %d\n", idx, log[idx].commit_ready);
+	if(log[idx].commit_ready == 1) {
 		printf("The current log struct %d is commit_ready\n", idx);
 		panic("The current log struct is commit_ready\n");
 	}
@@ -346,6 +347,7 @@ void execute_commit(int idx) {
 	acquire(&log[idx].lock);
 	printf("acquired lock - %d\n", idx);
 	log[idx].committing = 0;
+	printf("TEST: commit_ready for idx: %d is %d\n", idx, log[idx].commit_ready);
 	log[idx].commit_ready = 0;
 	printf("commit_ready: %d for idx: %d\n", log[idx].commit_ready, idx);
 	release(&log[idx].lock);
@@ -371,6 +373,7 @@ end_op(void)
 		return;
 	}
 //	printf("end_op: needs to be committed, fs_id: %d, commit_enqueue: %d, commit_dequeue: %d\n", id, get_commit_enqueue(), get_commit_dequeue());
+	printf("TEST: commit_id for idx: %d is %d\n", INDEX(id), log[INDEX(id)].commit_ready);
 	log[INDEX(id)].commit_ready = 1;
 	if(id == get_commit_dequeue()) {  //TODO: lock?
 		execute_commit(INDEX(id));
