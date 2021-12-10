@@ -82,7 +82,7 @@ initlog(int dev, struct superblock *sb)
   initlock(&commit_idx_lk, "commit index lock");
   init_log_struct(dev, sb);
   start_recovery();
-  printf("TEST: Completed Initlog\n");
+  printf("Completed Initlog\n");
 }
 
 static void init_log_struct(int  dev, struct superblock *sb) {
@@ -202,21 +202,14 @@ static void install_trans(int recovering, int idx)
 //Utility function for enqueue and dequeue
 
 void increment_enqueue() {
-//  acquire(&commit_idx_lk);
   commit_enqueue++;
-//  release(&commit_idx_lk);
 }
 
 void increment_dequeue() {
-//  acquire(&commit_idx_lk);
-	if(commit_dequeue == commit_enqueue) {
-		printf("Not incrementing dequeue\n");
-//		release(&commit_idx_lk);
-		return;
-	}
-  printf("incrementing dequeue\n");
+  if(commit_dequeue == commit_enqueue) {
+	return;
+  }
   commit_dequeue++;
-//  release(&commit_idx_lk);
 }
 
 void set_enqueue(uint64 val) {
@@ -233,30 +226,19 @@ void set_dequeue(uint64 val) {
   release(&commit_idx_lk);
 }
 
-//void set_is_committing(int val) {
-//	acquire(&commit_idx_lk);
-//	is_committing = val;
-//	release(&commit_idx_lk);
-//}
-
 uint64 get_commit_dequeue() {
 	uint64 val;
-//	acquire(&commit_idx_lk);
 	val = commit_dequeue;
-//	release(&commit_idx_lk);
 	return val;
 }
 
 uint64 get_commit_enqueue() {
 	uint64 val;
-//	acquire(&commit_idx_lk);
 	val = commit_enqueue;
-//	release(&commit_idx_lk);
 	return val;
 }
 
 //--
-
 
 int is_log_full(int idx) {
 	
@@ -287,15 +269,14 @@ begin_op(void)
 	while(1) {
 		int diff = MAX(0, (commit_enqueue - commit_dequeue));
 		if(diff > 3) {
-			printf("begin_op: more than 4 log struct\n");
+			printf("All log struct full. going to sleep: commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
 			sleep(&commit_idx_lk, &commit_idx_lk);
 		} else
 		if((diff == 3 ) && is_log_full(INDEX(commit_enqueue))) {
-			printf("begin_op all log struct full: commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
+			printf("All log struct full. going to sleep: commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
 			sleep(&commit_idx_lk, &commit_idx_lk);
-			printf("waking up:  commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
 		} else if(commit_ready(INDEX(commit_enqueue))) {
-			printf("begin_op- current log struct commit_ready: commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
+			printf("current log is commit_ready: commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
 			commit_enqueue++;
 		} else if(is_log_full(INDEX(commit_enqueue))) {
 			printf("begin_op- current log struct full: commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
@@ -305,9 +286,7 @@ begin_op(void)
 			break;
 		}
 	}
-	printf("begin_op- log struct free: commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
 	myproc()->fs_log_id = commit_enqueue;
-//	release(&commit_idx_lk);
 	
 	int idx = INDEX(myproc()->fs_log_id);
 	acquire(&log[idx].lock);
@@ -315,7 +294,6 @@ begin_op(void)
 		printf("The current log struct %d is committing\n", idx);
 		panic("The current log struct is committing\n");
 	}
-	printf("TEST: commit_ready for idx: %d is %d\n", idx, log[idx].commit_ready);
 	if(log[idx].commit_ready == 1) {
 		printf("The current log struct %d is commit_ready\n", idx);
 		panic("The current log struct is commit_ready\n");
@@ -327,12 +305,11 @@ begin_op(void)
 
 void wakeup_next() {
 	
-	printf("end_op: waking up other processes, commit_enqueue: %d, commit_dequeue: %d\n", get_commit_enqueue(), get_commit_dequeue());
 	uint64 dq = get_commit_dequeue();
 	if(!commit_ready(INDEX(dq))) {
 		return;
 	}
-	printf("end_op: waking up dequeue, commit_enqueue: %d, commit_dequeue: %d\n", get_commit_enqueue(), get_commit_dequeue());
+	printf("end_op: waking up next log struct, commit_enqueue: %d, commit_dequeue: %d\n", get_commit_enqueue(), get_commit_dequeue());
 	wakeup(&log[INDEX(dq)]);
 }
 
@@ -341,17 +318,13 @@ void execute_commit(int idx) {
 	log[idx].committing = 1;
 	release(&log[idx].lock);
 	release(&commit_idx_lk);
-	printf("end_op: fs_id: %d, commit_enqueue: %d, commit_dequeue: %d\n", idx, get_commit_enqueue(), get_commit_dequeue());
+	printf("Committing fs_id: %d, commit_enqueue: %d, commit_dequeue: %d\n", idx, get_commit_enqueue(), get_commit_dequeue());
 	commit(idx);
 	
-	printf("acquiring lock - %d\n", idx);
 	acquire(&commit_idx_lk);
 	acquire(&log[idx].lock);
-	printf("acquired lock - %d\n", idx);
 	log[idx].committing = 0;
-	printf("TEST: commit_ready for idx: %d is %d\n", idx, log[idx].commit_ready);
 	log[idx].commit_ready = 0;
-	printf("commit_ready: %d for idx: %d\n", log[idx].commit_ready, idx);
 	increment_dequeue();
 	wakeup(&commit_idx_lk);
 	release(&log[idx].lock);
@@ -380,25 +353,18 @@ end_op(void)
 		release(&commit_idx_lk);
 		return;
 	}
-//	if(log[INDEX(id)].lh.n == 0) {
-//		printf("Nothing to write\n");
-//		release(&log[INDEX(id)].lock);
-//		return;
-//	}
-//	printf("end_op: needs to be committed, fs_id: %d, commit_enqueue: %d, commit_dequeue: %d\n", id, get_commit_enqueue(), get_commit_dequeue());
-	printf("TEST: commit_id for idx: %d is %d\n", INDEX(id), log[INDEX(id)].commit_ready);
 	log[INDEX(id)].commit_ready = 1;
 	if(id == cmt_dq) {  //TODO: lock?
 		execute_commit(INDEX(id));
 		wakeup_next();
 		return;
 	}
-	printf("end_op: going to sleep, fs_id: %d, commit_enqueue: %d, commit_dequeue: %d\n", id, cmt_eq, cmt_dq);
+	printf("Not my turn. Going to sleep, fs_id: %d, commit_enqueue: %d, commit_dequeue: %d\n", id, cmt_eq, cmt_dq);
 	wakeup(&commit_idx_lk);
 	release(&commit_idx_lk);
 	sleep(&log[INDEX(id)], &log[INDEX(id)].lock);
+	printf("waking up from sleep, fs_id: %d, commit_enqueue: %d, commit_dequeue: %d\n", id, cmt_eq, cmt_dq);
 	acquire(&commit_idx_lk);
-	printf("id: %d woke up\n", id);
 	execute_commit(INDEX(id));
 	wakeup_next();
 }
