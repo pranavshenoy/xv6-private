@@ -330,17 +330,19 @@ void wakeup_next() {
 
 
 void execute_commit(int idx) {
-	printf("end_op: id == commit_dequeue, fs_id: %d, commit_enqueue: %d, commit_dequeue: %d\n", idx, get_commit_enqueue(), get_commit_dequeue());
 	log[idx].committing = 1;
 	release(&log[idx].lock);
+	printf("end_op: fs_id: %d, commit_enqueue: %d, commit_dequeue: %d\n", idx, get_commit_enqueue(), get_commit_dequeue());
 	commit(idx);
 	
+	printf("acquiring lock - %d\n", idx);
 	acquire(&log[idx].lock);
+	printf("acquired lock - %d\n", idx);
 	log[idx].committing = 0;
 	log[idx].commit_ready = 0;
 	wakeup(&commit_idx_lk);
-	increment_dequeue();
 	release(&log[idx].lock);
+	increment_dequeue();
 }
 
 // called at the end of each FS system call.
@@ -360,7 +362,7 @@ end_op(void)
 		release(&log[INDEX(id)].lock);
 		return;
 	}
-	printf("end_op: needs to be committed, fs_id: %d, commit_enqueue: %d, commit_dequeue: %d\n", id, get_commit_enqueue(), get_commit_dequeue());
+//	printf("end_op: needs to be committed, fs_id: %d, commit_enqueue: %d, commit_dequeue: %d\n", id, get_commit_enqueue(), get_commit_dequeue());
 	log[INDEX(id)].commit_ready = 1;
 	if(id == get_commit_dequeue()) {  //TODO: lock?
 		execute_commit(INDEX(id));
