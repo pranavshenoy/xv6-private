@@ -303,15 +303,16 @@ begin_op(void)
 	myproc()->fs_log_id = commit_enqueue;
 	release(&commit_idx_lk);
 	
-	acquire(&log[myproc()->fs_log_id].lock);
-	if(log[myproc()->fs_log_id].committing) {
+	int idx = INDEX(myproc()->fs_log_id);
+	acquire(&log[idx].lock);
+	if(log[idx].committing) {
 		panic("The current process is committing\n");
 	}
-	if(log[myproc()->fs_log_id].commit_ready) {
+	if(log[idx].commit_ready) {
 		panic("The current process is commit_ready\n");
 	}
-	log[INDEX(myproc()->fs_log_id)].outstanding += 1;
-	release(&log[myproc()->fs_log_id].lock);
+	log[idx].outstanding += 1;
+	release(&log[idx].lock);
 	
 }
 
