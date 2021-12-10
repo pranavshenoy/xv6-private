@@ -285,7 +285,7 @@ begin_op(void)
 		int diff = MAX(0, (commit_enqueue - commit_dequeue));
 		if(diff > 4) {
 			panic("more than 4 log structure at a time");
-		} else if(((commit_enqueue - commit_dequeue) == 4) && is_log_full(INDEX(commit_enqueue))) {
+		} else if(((commit_enqueue - commit_dequeue) == 3) && is_log_full(INDEX(commit_enqueue))) {
 			printf("begin_op all log struct full: commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
 			sleep(&commit_idx_lk, &commit_idx_lk);
 			printf("waking up:  commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
@@ -372,7 +372,7 @@ end_op(void)
 	printf("end_op: going to sleep, fs_id: %d, commit_enqueue: %d, commit_dequeue: %d\n", id, get_commit_enqueue(), get_commit_dequeue());
 	wakeup(&commit_idx_lk);
 	sleep(&log[INDEX(id)], &log[INDEX(id)].lock);
-	
+	printf("id: %d woke up\n", id);
 	execute_commit(INDEX(id));
 	wakeup_next();
 }
