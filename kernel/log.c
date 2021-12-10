@@ -241,7 +241,9 @@ void set_dequeue(uint64 val) {
 
 uint64 get_commit_dequeue() {
 	uint64 val;
+	printf("TEST: trying to acquire commit_idx_lk\n");
 	acquire(&commit_idx_lk);
+	printf("TEST: acquired commit_idx_lk\n");
 	val = commit_dequeue;
 	release(&commit_idx_lk);
 	return val;
@@ -322,7 +324,6 @@ begin_op(void)
 	}
 	log[idx].outstanding += 1;
 	release(&log[idx].lock);
-	
 }
 
 void wakeup_next() {
