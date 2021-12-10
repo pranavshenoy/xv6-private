@@ -241,19 +241,17 @@ void set_dequeue(uint64 val) {
 
 uint64 get_commit_dequeue() {
 	uint64 val;
-	printf("TEST: trying to acquire commit_idx_lk\n");
-	acquire(&commit_idx_lk);
-	printf("TEST: acquired commit_idx_lk\n");
+//	acquire(&commit_idx_lk);
 	val = commit_dequeue;
-	release(&commit_idx_lk);
+//	release(&commit_idx_lk);
 	return val;
 }
 
 uint64 get_commit_enqueue() {
 	uint64 val;
-	acquire(&commit_idx_lk);
+//	acquire(&commit_idx_lk);
 	val = commit_enqueue;
-	release(&commit_idx_lk);
+//	release(&commit_idx_lk);
 	return val;
 }
 
@@ -309,7 +307,7 @@ begin_op(void)
 	}
 	printf("begin_op- log struct free: commit_enqueue: %d, commit_dequeue: %d\n", commit_enqueue, commit_dequeue);
 	myproc()->fs_log_id = commit_enqueue;
-	release(&commit_idx_lk);
+//	release(&commit_idx_lk);
 	
 	int idx = INDEX(myproc()->fs_log_id);
 	acquire(&log[idx].lock);
@@ -324,6 +322,7 @@ begin_op(void)
 	}
 	log[idx].outstanding += 1;
 	release(&log[idx].lock);
+	release(&commit_idx_lk);
 }
 
 void wakeup_next() {
@@ -341,10 +340,12 @@ void wakeup_next() {
 void execute_commit(int idx) {
 	log[idx].committing = 1;
 	release(&log[idx].lock);
+	release(&commit_idx_lk);
 	printf("end_op: fs_id: %d, commit_enqueue: %d, commit_dequeue: %d\n", idx, get_commit_enqueue(), get_commit_dequeue());
 	commit(idx);
 	
 	printf("acquiring lock - %d\n", idx);
+	acquire(&commit_idx_lk);
 	acquire(&log[idx].lock);
 	printf("acquired lock - %d\n", idx);
 	log[idx].committing = 0;
@@ -352,9 +353,9 @@ void execute_commit(int idx) {
 	log[idx].commit_ready = 0;
 	printf("commit_ready: %d for idx: %d\n", log[idx].commit_ready, idx);
 	increment_dequeue();
-	release(&log[idx].lock);
 	wakeup(&commit_idx_lk);
-	
+	release(&log[idx].lock);
+	release(&commit_idx_lk);
 }
 
 // called at the end of each FS system call.
@@ -362,6 +363,7 @@ void execute_commit(int idx) {
 void
 end_op(void)
 {
+	acquire(&commit_idx_lk);
 	uint64 id = myproc()->fs_log_id;
 	myproc()->fs_log_id = 0;
 	int cmt_dq = get_commit_dequeue();
@@ -375,6 +377,7 @@ end_op(void)
 	if(log[INDEX(id)].outstanding != 0) { //not last end_op
 		wakeup(&commit_idx_lk);
 		release(&log[INDEX(id)].lock);
+		release(&commit_idx_lk);
 		return;
 	}
 //	if(log[INDEX(id)].lh.n == 0) {
@@ -392,7 +395,9 @@ end_op(void)
 	}
 	printf("end_op: going to sleep, fs_id: %d, commit_enqueue: %d, commit_dequeue: %d\n", id, cmt_eq, cmt_dq);
 	wakeup(&commit_idx_lk);
+	release(&commit_idx_lk);
 	sleep(&log[INDEX(id)], &log[INDEX(id)].lock);
+	acquire(&commit_idx_lk);
 	printf("id: %d woke up\n", id);
 	execute_commit(INDEX(id));
 	wakeup_next();
