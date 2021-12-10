@@ -347,6 +347,7 @@ void execute_commit(int idx) {
 	printf("acquired lock - %d\n", idx);
 	log[idx].committing = 0;
 	log[idx].commit_ready = 0;
+	printf("commit_ready: %d for idx: %d\n", log[idx].commit_ready, idx);
 	wakeup(&commit_idx_lk);
 	release(&log[idx].lock);
 	increment_dequeue();
