@@ -322,7 +322,7 @@ void wakeup_next() {
 	if(!commit_ready(INDEX(dq))) {
 		return;
 	}
-	printf("end_op: waking up dequeue, fs_id: %d, commit_enqueue: %d, commit_dequeue: %d\n", id, get_commit_enqueue(), get_commit_dequeue());
+	printf("end_op: waking up dequeue, commit_enqueue: %d, commit_dequeue: %d\n", get_commit_enqueue(), get_commit_dequeue());
 	wakeup(&log[INDEX(dq)]);
 }
 
